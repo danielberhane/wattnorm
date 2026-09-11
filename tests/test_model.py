@@ -50,23 +50,23 @@ def test_calibrator_round_trips_through_dict(fitted):
 
 def test_cusum_does_not_trip_on_standard_noise():
     rng = np.random.default_rng(0)
-    c = CUSUM(k=0.5, h=8.0)
+    c = CUSUM(k=1.0, h=12.0)
     assert all(c.update(z) == 0 for z in rng.normal(0, 1, 1000))
 
 
 def test_cusum_trips_quickly_and_in_the_right_direction_after_shift():
-    c = CUSUM(k=0.5, h=8.0)
-    steps = [c.update(z) for z in [2.0] * 10]
-    assert 1 in steps and steps.index(1) <= 7
-    c = CUSUM(k=0.5, h=8.0)
-    steps = [c.update(z) for z in [-2.0] * 10]
+    c = CUSUM(k=1.0, h=12.0)
+    steps = [c.update(z) for z in [2.0] * 15]
+    assert 1 in steps and steps.index(1) <= 12
+    c = CUSUM(k=1.0, h=12.0)
+    steps = [c.update(z) for z in [-2.0] * 15]
     assert -1 in steps
 
 
 def test_cusum_resets_after_trip():
-    c = CUSUM(k=0.5, h=8.0)
-    [c.update(2.0) for _ in range(10)]
-    assert c.s_pos < 8.0
+    c = CUSUM(k=1.0, h=12.0)
+    [c.update(2.0) for _ in range(15)]
+    assert c.s_pos < 12.0
 
 
 # ---------- Detector ----------
@@ -200,3 +200,11 @@ def test_detector_still_catches_offset_after_adapting(detector):
     df.loc[i0:i1, "kw"] *= 1.3
     scores, _ = detector.score(df)
     assert scores.loc[i0:i1, "alert_type"].str.contains("SUSTAINED_HIGH").any()
+
+
+def test_detector_does_not_raise_rebound_alert_after_offset_ends(detector):
+    df = synthetic("2018-07-01", 3, seed=41)
+    df.loc[100:130, "kw"] *= 1.3
+    scores, _ = detector.score(df)
+    assert scores.loc[100:130, "alert_type"].str.contains("SUSTAINED_HIGH").any()
+    assert not scores.loc[135:287, "alert_type"].str.contains("SUSTAINED_LOW").any()

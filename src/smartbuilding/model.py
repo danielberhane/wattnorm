@@ -21,6 +21,7 @@ from smartbuilding.features import FEATURES, SeasonalMeanImputer, build_features
 SLOT_HOURS = 0.25
 SLOTS_PER_DAY = 96
 Z_PER_HALF_WIDTH = 1.645  # a 90 % band spans ±1.645σ under normality
+LEVEL_CLIP_SIGMA = 2.0  # robust level tracking: clip residuals fed to the EWMA
 
 
 # ---------------------------------------------------------------- quantile model
@@ -207,7 +208,12 @@ class Detector:
             cpos.append(state.cusum.s_pos)
             cneg.append(state.cusum.s_neg)
             if np.isfinite(kw_i):
-                state.level_bias_kw += alpha * ((kw_i - q50[i]) - state.level_bias_kw)
+                # robust update: an anomaly may nudge the level by at most 2σ per slot,
+                # so it does not become "normal" and cause a rebound alert when it ends
+                resid = np.clip(
+                    kw_i - expected[i], -LEVEL_CLIP_SIGMA * sigma[i], LEVEL_CLIP_SIGMA * sigma[i]
+                )
+                state.level_bias_kw += alpha * resid
 
         lower, upper = expected - half, expected + half
         excess = np.nan_to_num(np.clip(df["kw"].to_numpy() - upper, 0.0, None) * SLOT_HOURS)

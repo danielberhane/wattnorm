@@ -16,13 +16,15 @@ PARAMS = ModelParams(
     min_child_samples=20,
     target_coverage=0.9,
 )
+# mirrors configs/default.yaml — the rules actually deployed
 RULES = Rules(
     spike_z=4.0,
-    cusum_k=0.5,
-    cusum_h=8.0,
+    cusum_k=1.0,
+    cusum_h=12.0,
     stuck_slots=8,
     close_after_in_band_slots=8,
     weather_stale_hours=3,
+    level_halflife_days=3,
 )
 
 
