@@ -32,5 +32,9 @@
       "Read(./secrets/**)",
       "Read(./.env)"
     ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
   }
 }
