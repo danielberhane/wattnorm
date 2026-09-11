@@ -2,6 +2,10 @@
 
 *A technical write-up of the Smartbuildings project. Every figure comes from the repository at the commit this document ships with and is reproducible with the commands in Appendix A. Where a number was produced once and then a design decision changed, the text says so.*
 
+> **TL;DR.** One building, one 15-minute meter, six years of readings, no labelled anomalies. A context-only LightGBM quantile model predicts what the building *should* draw for the time and weather; a calibrated band, a robust level tracker and a winsorised CUSUM turn the signed residual into three kinds of alert. On a held-out year it catches 93–100 % of six injected anomaly types at **1.7 false alarms per week** (budget: 3), reacts to a sustained offset in 12 minutes, and beats a seasonal-naive baseline on every type. Replayed live through MQTT → TimescaleDB → Grafana, it surfaces the 2020 lockdown as weeks of "below expectation" without being told. Four of its design decisions came from watching a first version fail — those failures are the most useful part of this document.
+
+This is a return to a problem I worked on in 2017: [*An ensemble learning framework for anomaly detection in building energy consumption*](https://www.sciencedirect.com/science/article/pii/S0378778817306904) (Araya, Grolinger, ElYamany, Capretz & Bitsuamlak, *Energy and Buildings* 144, 191–206). That paper combined a **pattern-based** classifier — the CCAD-SW autoencoder on overlapping sliding windows — with **prediction-based** classifiers by majority vote, and judged everything by sensitivity and false-alarm rate. The notebook this project inherited was a direct descendant of the pattern-based branch. The system described here takes the prediction-based branch as its core, keeps the two metrics, and adds what a deployed system needs and a paper does not: calibration, adaptation to regime change, a promotion gate, and a dashboard a building manager can act on.
+
 ---
 
 ## Contents
@@ -77,7 +81,11 @@ Gaps by year inside the modelling window are informative on their own: 2016 had 
 
 **Time zone.** Timestamps are naive local time (America/New_York). A 15-minute grid built in local time is wrong twice a year: the 1 a.m. hour occurs twice in November and the 2 a.m. hour does not exist in March. The notebook ignored this. The system localises with `ambiguous="NaT", nonexistent="NaT"` and drops the affected readings (52 in 6.5 years — the source gives no way to know which occurrence a November reading belongs to), converts to UTC for storage and the grid, and converts back to local time only to compute calendar features. All database timestamps are `timestamptz`.
 
-**Daily shape** (training years, local time): weekday mean 241.6 kW vs weekend 229.3 kW; the daily minimum is at 07:00 (222.5 kW) and the maximum at 19:00 (256.0 kW). This is not an office profile — an office peaks mid-afternoon and drops after 18:00. An evening peak with a shallow morning trough is closer to residential or mixed-use behaviour. The model does not need to know which; the features let it learn the shape.
+**Daily shape** (training years, local time): weekday mean 241.6 kW vs weekend 229.3 kW; the daily minimum is at 07:00 (222.5 kW) and the maximum at 19:00 (256.0 kW).
+
+![Figure 1 — daily demand profile](img/fig1_daily_profile.png)
+
+*Figure 1. Mean demand by time of day, 2016–2017. This is not an office profile — an office peaks mid-afternoon and empties after 18:00. An evening peak with a shallow morning trough is closer to residential or mixed-use behaviour. The model does not need to be told which; the features let it learn the shape.*
 
 ### 3.2 Weather
 
@@ -96,6 +104,10 @@ Reanalysis is a model, not a thermometer, so it was validated against the statio
 | wind speed | 0.767 | 4.6 km/h | fair |
 | gusts | 0.621 | 24 km/h | the *station* column is mostly zeros — it only recorded gusty hours; the export is the unreliable one |
 | precipitation | 0.310 | 0.14 mm | reanalysis precipitation is spatially coarse; treated as a weak feature |
+
+![Figure 2 — reanalysis vs station temperature](img/fig2_weather_validation.png)
+
+*Figure 2. Open-Meteo reanalysis against the scraped station export on 35,808 overlapping hours. Temperature — the variable that matters most — agrees to r = 0.98; the dashed line is y = x.*
 
 The station CSVs remain as an offline fallback behind a loader that normalises units (°F→°C, inHg→hPa, mph→km/h, in→mm) and nulls the impossible values.
 
@@ -181,6 +193,10 @@ Linear correlations with demand on the training set and LightGBM gain importance
 | precip_mm | −0.005 | 0.3 % |
 | is_weekend | −0.291 | 0.0 % |
 
+![Figure 3 — feature importance](img/fig3_feature_importance.png)
+
+*Figure 3. Share of split gain in the median booster. Calendar features in blue, weather in green.*
+
 Three things worth noticing. Time of day dominates, as it should. The day-of-year pair carries 24 % of the gain while its linear correlation is near zero — seasonality is real but non-monotonic, which is precisely the case where trees beat a linear model and where cyclic encoding earns its place. And `is_weekend` has zero gain despite a −0.29 correlation: the model gets the same information from `sin_dow`, so the flag is redundant (harmless, and kept for readability of SHAP explanations).
 
 Weather matters less than intuition suggests for this building: temperature, dew point and pressure together take ~15 % of the gain. That is consistent with an evening-peaking load driven by occupancy rather than a chiller-dominated office.
@@ -239,6 +255,10 @@ Diagnosis on the 2019 z series:
 - monthly mean z from **−1.48 in January to +0.57 in November**; overall mean −0.42 — 2019 ran lower than 2016–17 in the same contexts;
 - daily-mean z had σ = 0.88; on 96 of 366 days the day's mean |z| exceeded 1.
 
+![Figure 4 — monthly mean residual, raw vs level-adjusted](img/fig4_level_drift.png)
+
+*Figure 4. Monthly mean of z on the held-out year. Orange: the raw residual against the 2016–17 model — the building runs 1.5σ low in January and 0.6σ high in November. Blue: the same residual after the level tracker of §7.2. CUSUM sees the blue line.*
+
 A context-only model trained on 2016–17 cannot know that the building runs 1.5σ lower in January 2019 than in January 2017. CUSUM with k = 0.5 correctly accumulates any persistent bias above 0.5σ and flagged entire months. Correct mathematics, useless alerts.
 
 Two textbook defaults were also wrong for this cadence. Two-sided CUSUM with k = 0.5, h = 5 has an in-control average run length of roughly 465 steps on *white noise*. At 96 readings a day that is a false "sustained" alert every five days in each direction before any real structure is considered — the unit test that fed 1,000 N(0,1) values into it failed, which is how the defect was found. And a single enormous reading (z = 30) tripped CUSUM on its own and was labelled "sustained".
@@ -279,6 +299,10 @@ With level tracking in place, a small grid was evaluated with injected anomalies
 | **1.5** | **12** | **5** | **1.11** | **1.0 · 1.0 · 1.0 · 1.0 · 0.83** |
 | 1.5 | 16 | 5 | 1.02 | 1.0 · 1.0 · 1.0 · 1.0 · 0.83 |
 | 2.0 | 12 | 5 | 0.61 | 1.0 · 1.0 · 1.0 · 1.0 · 0.83 |
+
+![Figure 5 — threshold tuning on 2018](img/fig6_tuning.png)
+
+*Figure 5. False alarms per week on the clean calibration year for each rule setting. Recall was 1.0 on five of six types for every point shown; the chosen setting is circled.*
 
 `k` — the allowance, how much persistent bias CUSUM tolerates — is the dominant lever; `h` and the spike threshold are second-order. k = 1.5 was chosen over 2.0 to keep sensitivity to offsets around +10 % (the overnight-waste case), accepting roughly half an extra false alarm a week. Final rules: `spike_z = 5`, `cusum_k = 1.5`, `cusum_h = 12`, `stuck_slots = 8`, alerts close after 8 consecutive in-band slots, level half-life 3 days.
 
@@ -331,6 +355,10 @@ A **seasonal-naive** detector: expected demand = the reading at the same slot la
 | Recall — schedule shift | **1.00** · ~4.4 h | 0.80 · ~7.4 h |
 | Recall — stuck meter | 1.00 · 96 min | 1.00 · 105 min |
 
+![Figure 6 — recall by anomaly type, 2019](img/fig5_results_2019.png)
+
+*Figure 6. Recall per injected anomaly type on the held-out year, detector vs seasonal-naive baseline, with each detector's false-alarm rate on the clean year in the legend.*
+
 Read carefully:
 
 - Within the 3/week budget, the detector catches everything the baseline catches, catches drift and schedule shifts the baseline misses, and reacts four to five times faster to offsets. Schedule shift is the case that separates them most cleanly: the baseline compares to last week's reading at the same slot, so a building running its day profile at night looks plausible if it did so last week too; only the context model knows that 02:00 on a Tuesday should be quiet.
@@ -357,6 +385,10 @@ The complete 2020-01 → 2021-05 period — real readings only, no injection —
 | 2020-04 | 20 | **14** | 6 | 54 | |
 | 2020-05 | 31 | 2 | **29** | 816 | partial reopening reads as *high* against the newly learned low level |
 | 2020-06 → 2021-05 | 8–26 / month | | | | elevated vs 2019 with a model two years stale |
+
+![Figure 7 — replay alerts by month](img/fig7_replay_alerts.png)
+
+*Figure 7. Alert events per month from the live replay of real readings, coloured by direction. The frozen 2018 model sees the lockdown as weeks of "below expectation", then partial reopening as "above" the newly learned level.*
 
 The March–May 2020 sequence is exactly what a manager would want explained on the dashboard: first "the building is running far below what it should" for weeks, then "it is running above what it just was". Whether the second wave is *useful* depends on the question being asked — it is correct relative to the recent level, and it is the strongest argument in the project for retraining on a trailing window rather than running a frozen model.
 
@@ -390,6 +422,10 @@ Behaviour under the failure modes that actually occurred:
 - **Database restart** → the sink reconnects once and retries; before this fix (a code-review finding) every reading after a Postgres restart was silently dropped forever while the container stayed "healthy".
 - **Fast replays** → mosquitto's default 1,000-message per-client queue dropped 75 % of readings when a 1,000,000× replay outran a ~25 reading/s scorer; the queue is now unbounded and the sustainable backfill speed is ~30,000× (17 months in ~40 minutes).
 - **Every alert record** carries observed vs expected kW, peak z, accumulated excess kWh → CO₂e → cost, the model version, and the top-3 SHAP drivers of the expectation ("time of day +38 kW, weekday +12, temperature −6") so the manager sees *why the model expected what it expected* — the explanation of the baseline, not the cause of the anomaly.
+
+![Figure 8 — an alert up close](img/fig8_alert_example.png)
+
+*Figure 8. Two days of real readings with a +25 % offset injected from 03:15 to 14:00 on 2 January. The alert opens on the first anomalous reading and closes at 15:45, after eight consecutive in-band readings. The small alert at noon on 1 January is the building's own New Year's Day behaviour. Note the band lifting slightly during the offset — the level tracker's clipped, deliberately slow response.*
 
 ### 10.3 Model registry and hot-swap
 
@@ -455,6 +491,8 @@ Before publication the repository was independently reviewed against the plan. T
 - **Live weather** needs the Open-Meteo current/forecast endpoint wired in; replay uses the archive.
 
 ## 14. Lessons
+
+The 2017 paper closed with the observation that an ensemble raised sensitivity by 3.6 % and lowered the false-alarm rate by 2.7 % over the best single classifier. Nine years on, the lesson of this project is that the largest gains were not in the classifier at all: they were in the split, the calibration, the adaptation to a building that changes, and the gate that decides when a new model is allowed to replace an old one.
 
 1. **Profile before modelling.** Gaps, units, time zone, regimes. Half of the inherited defects were data handling.
 2. **Split by time, test on a whole year, look at the test year once — and write down when you looked twice.**
