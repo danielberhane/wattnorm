@@ -1,271 +1,496 @@
-# Contextual anomaly detection for building energy: from a leaky notebook to a gated, real-time system
+# Contextual anomaly detection for building energy — data, features, model, evaluation, deployment
 
-*A technical write-up of the Smartbuildings project — data, features, model selection, evaluation without labels, deployment and monitoring. Every number below comes from the repository at the commit this document ships with and can be reproduced with the commands in the appendix.*
+*A technical write-up of the Smartbuildings project. Every figure comes from the repository at the commit this document ships with and is reproducible with the commands in Appendix A. Where a number was produced once and then a design decision changed, the text says so.*
 
 ---
 
-## 1. The problem
+## Contents
 
-A building's electricity demand is a function of *context*: time of day, day of week, season, holidays and weather. An anomaly is not "a high reading"; it is a reading that is high **for its context** — 280 kW at 2 a.m. on a Sunday in April is a problem, 280 kW at 2 p.m. on a July Tuesday is not. For a sustainability programme the two directions matter differently:
+1. The problem and the operational constraint
+2. What was inherited, and what it taught
+3. Data: sourcing, profiling, cleaning
+4. Feature engineering
+5. Model selection
+6. Calibration: from quantiles to a band
+7. From residual to alert: the rules, and how they failed first
+8. Evaluation without labels
+9. Results
+10. Deployment
+11. Monitoring, drift and retraining
+12. What the code review found
+13. Limits, open questions, next steps
+14. Lessons
 
-- **Too high for context** → energy waste (HVAC or lighting left running, scheduling errors). Quantifiable in kWh, CO₂e and cost.
-- **Too low for context** → equipment failure, metering fault, or an unplanned change worth knowing about.
+Appendix A — reproducing the numbers · Appendix B — glossary of the scoring quantities
 
-The operational constraint that shaped everything: a building manager will act on **a few alerts a week**. Above roughly three false alarms per week, a dashboard is ignored. The whole system is designed around that budget.
+---
 
-There are **no labelled anomalies**. Nobody recorded when the HVAC was left on. So the evaluation problem — how do you know it works? — is as central as the modelling problem.
+## 1. The problem and the operational constraint
 
-### 1.1 Where the project started
+A building's electric demand is a function of its **context**: time of day, day of week, season, holidays and weather. An anomaly is therefore not "a high reading" but a reading that is unusual *for its context*. 280 kW at 2 a.m. on a Sunday in April is a problem; 280 kW at 2 p.m. on a hot July Tuesday is normal.
 
-The prior state was a Jupyter notebook (2022–2025): an H2O deep autoencoder on hourly sliding windows of demand plus weather, scored by reconstruction MSE and evaluated against synthetic anomalies. Three defects made its results unreliable, and each one taught something about the redesign:
+For a sustainability programme the *direction* of the deviation carries the meaning:
 
-| Defect in the notebook | Consequence | Design response |
+| Direction | Typical cause | What the manager does | What we quantify |
+|---|---|---|---|
+| Too high for context | HVAC or lighting left running, schedule error, an occupancy event nobody planned for | goes and switches something off, fixes a schedule | excess kWh → CO₂e → cost |
+| Too low for context | equipment failure, metering or communications fault, unplanned closure | raises a maintenance ticket | duration, deficit |
+
+Two hard constraints shaped the design more than any modelling choice:
+
+- **There are no labels.** Nobody recorded when the HVAC was left on. Any claim about detection performance has to be constructed, and the construction has to be honest.
+- **The alert budget.** A building manager will act on a handful of alerts a week. Beyond roughly three false alarms per week a dashboard becomes wallpaper. This number — 3/week — is written into the promotion gate.
+
+Design goals were set explicitly and in priority order before building: simplicity (one model, one database, one dashboard), maintainability, ease of use, reproducibility, clear boundaries, config over code, fail-safe defaults, observability by construction, extensibility, secrets out of the repository. Several later decisions ("do not add a lag model", "no Prometheus", "gate on recall not F1") trace directly back to that list.
+
+## 2. What was inherited, and what it taught
+
+The starting point was a Jupyter notebook developed 2022–2025: an H2O deep autoencoder (`[25, 14, 6]`, tanh, L1 = 1e-4) trained on hourly sliding windows of five 15-minute demand readings plus weather and cyclic time features, scored by reconstruction MSE and evaluated with a ROC curve against synthetic anomalies drawn from Burr and Fisk distributions fitted to peak- and low-demand hours.
+
+It contained good ideas that survive in the new system — cyclic time encodings, seasonal weather imputation, a complete 15-minute timestamp grid, the selection of 2016–2019 as a stable regime, and the idea of synthetic positives validated with a Kolmogorov–Smirnov test. It also contained three defects that invalidated its headline result, and each drove a design rule:
+
+**Leaky split.** `StratifiedShuffleSplit` on (hour, month, weekday) shuffles rows at random. Adjacent windows share four of their five demand values, so roughly 80 % of every test window's content was also in the training set. A reconstruction model that has seen four-fifths of the answer reconstructs well; the ROC was meaningless. *Rule: split by time, never shuffle a time series, and test on a whole year.*
+
+**Imputation fit on everything.** The (month, hour) weather means were computed on the full frame before splitting, letting test-period information into training features. *Rule: every fitted transformation is fit on the training years only and serialised with the model.*
+
+**Direction-blind score.** Reconstruction MSE squares and averages residuals across sixteen inputs; +80 kW and −80 kW produce the same score, and the score does not say which input deviated. For a waste-versus-failure use case that is the whole point. *Rule: predict the expected value and score the signed residual.*
+
+The notebook's own correlation table pointed to a fourth issue: the five windowed demand values correlated 0.96–0.97 with the hourly mean, while the strongest context feature (hour) reached 0.48. The autoencoder had mostly learned *demand ≈ its neighbours*. Any detector fed its own recent demand will drift toward that solution — the reason the new model uses no demand lags (§4.4).
+
+## 3. Data: sourcing, profiling, cleaning
+
+### 3.1 Demand
+
+Source: a single building's electricity meter, 15-minute interval, `2015-01-01 05:00` → `2021-05-31 03:45` local time. **221,387 readings**, mean 235, standard deviation 26, range 118–391 (units are assumed to be kW; see §13).
+
+Profiling ran before any modelling, because half the notebook's problems were data handling:
+
+| Property | Finding | Handling |
 |---|---|---|
-| `StratifiedShuffleSplit` on 5-reading overlapping windows | ~80 % of every test window's values were also in training; ROC looked excellent and meant nothing | Strictly temporal splits; never shuffle a time series |
-| Weather imputation fit on the whole frame | Test-period information in the training features | Imputer fit on the training years only |
-| Reconstruction MSE as the score | Direction-blind: +80 kW and −80 kW give the same score; waste and failure are indistinguishable | Predict *expected* demand, score the **signed** residual |
+| Duplicated timestamps | 0 | keep-last rule anyway |
+| Non-positive readings | 0 | assert `kw > 0` on load — a meter never reports zero or negative load, so it is a data error, not an anomaly |
+| Missing slots | **1.53 %** (3,441 of 224,828 grid slots) in **200 gaps** | kept as `NaN` on a complete grid, never dropped |
+| Gap length | 6 gaps > 1 day; longest **307 h** (29 Mar → 11 Apr 2020) | `gap_report()` tabulates them; alert rules ignore `NaN` slots without touching state |
+| Yearly level | 2015 mean **258.7 kW**; 2016–2019 **233–239**; 2020 **210.2**; 2021 **222.9** | 2015 excluded from training; the 2020 drop is the replay's natural test |
 
-## 2. Data
+Gaps by year inside the modelling window are informative on their own: 2016 had 24 gaps totalling 1,154 slots (longest 126 h), 2019 had 107 gaps totalling only 118 slots (longest 2 h) — the meter's communications improved over time, and short dropouts became the norm. Any detector has to be indifferent to a single missing slot.
 
-### 2.1 Demand
+**Time zone.** Timestamps are naive local time (America/New_York). A 15-minute grid built in local time is wrong twice a year: the 1 a.m. hour occurs twice in November and the 2 a.m. hour does not exist in March. The notebook ignored this. The system localises with `ambiguous="NaT", nonexistent="NaT"` and drops the affected readings (52 in 6.5 years — the source gives no way to know which occurrence a November reading belongs to), converts to UTC for storage and the grid, and converts back to local time only to compute calendar features. All database timestamps are `timestamptz`.
 
-One meter, 15-minute interval, `2015-01-01 05:00` → `2021-05-31 03:45`, **221,387 readings**, mean 235 (units assumed kW), range 118–391.
+**Daily shape** (training years, local time): weekday mean 241.6 kW vs weekend 229.3 kW; the daily minimum is at 07:00 (222.5 kW) and the maximum at 19:00 (256.0 kW). This is not an office profile — an office peaks mid-afternoon and drops after 18:00. An evening peak with a shallow morning trough is closer to residential or mixed-use behaviour. The model does not need to know which; the features let it learn the shape.
 
-Profiling before modelling (Phase 1, `gap_report`):
+### 3.2 Weather
 
-- **1.53 % of slots missing** across **200 gaps**; six gaps longer than a day; the longest **307 hours** (29 March → 11 April 2020). Gaps are kept as `NaN` on a complete 15-minute grid, never dropped, so the grid is honest about what the meter did and did not report.
-- **Regimes.** 2015 ran ~9 % higher than 2016–2019 (equipment or metering changed); April 2020 onward runs ~10 % lower (lockdown). These are not noise — they are the reason the system needs a level tracker and a retraining path (§5.3, §8).
-- **Daylight saving.** Timestamps are naive local time. A 15-minute grid built in local time has a duplicated hour every November and a missing one every March. The fix is to localise to `America/New_York` with `ambiguous="NaT", nonexistent="NaT"` and drop those slots (52 readings in 6.5 years), store everything in UTC, and compute calendar features back in local time.
+Two scraped Weather Underground exports were in the repository, both produced by Selenium scrapers that parsed the site's HTML: a **metric** one (2016-01 → 2020-02; °C, hPa) and an **imperial** one (2015–2019; °F, inHg, mph). They overlapped in years, disagreed in units, contained `Pressure == 0` where the sensor had returned nothing, had a 294 km/h "gust", and ended fourteen months before the demand data. As a production source, a scraper is the weakest link imaginable: it breaks on any front-end change and needs a browser.
 
-### 2.2 Weather
+The system uses the **Open-Meteo historical archive** (ERA5/ERA5-Land reanalysis, free, no key) for the building's location (42.44 N, −76.50 W): **56,232 hourly rows**, 2015-01 → 2021-05, seven variables — temperature, dew point, relative humidity, wind speed, wind gusts, surface pressure, precipitation — requested in metric units. It also has a forecast and current-conditions API for the live case.
 
-Two scraped Weather Underground exports were in the repository: one metric (2016-01 → 2020-02, with `Pressure == 0` sensor nulls and a 294 km/h "gust"), one imperial (2015–2019). Different units, overlapping years, ending fourteen months before the demand data does. Neither is a defensible canonical source.
+Reanalysis is a model, not a thermometer, so it was validated against the station export on the **35,808 overlapping hours**:
 
-The system uses the **Open-Meteo historical archive** (ERA5-based reanalysis, free, no key) for Ithaca (42.44 N, −76.50 W), 2015-01 → 2021-05, 56,232 hourly rows, seven variables: temperature, dew point, relative humidity, wind speed, gusts, surface pressure, precipitation. Validated against the station export on the 35,808 overlapping hours:
+| Variable | r | MAE | Interpretation |
+|---|---|---|---|
+| temperature | **0.984** | 1.95 °C | excellent |
+| dew point | **0.983** | 1.66 °C | excellent |
+| surface pressure | **0.978** | 25 hPa | a constant offset (station altitude vs modelled surface); harmless for a tree model, which only sees rank order within the training range |
+| relative humidity | 0.795 | 8.8 % | fair |
+| wind speed | 0.767 | 4.6 km/h | fair |
+| gusts | 0.621 | 24 km/h | the *station* column is mostly zeros — it only recorded gusty hours; the export is the unreliable one |
+| precipitation | 0.310 | 0.14 mm | reanalysis precipitation is spatially coarse; treated as a weak feature |
 
-| Variable | Correlation | Note |
+The station CSVs remain as an offline fallback behind a loader that normalises units (°F→°C, inHg→hPa, mph→km/h, in→mm) and nulls the impossible values.
+
+**Alignment to the grid.** Station observations arrive at irregular minutes (07:56, 08:30, 08:56); Open-Meteo is on the hour. Observations are rounded to the hour (keep-last on collisions) and forward-filled onto the 15-minute grid for at most four slots, so an hour with no observation stays `NaN` and is handled by the imputer rather than by a stale value carried across a gap. The notebook's approach — repeat each hourly row four times and glue on minute labels — was replaced by `reindex().ffill(limit=4)`.
+
+### 3.3 Splits
+
+| Split | Period | Rows (non-missing) | Used for |
+|---|---|---|---|
+| train | 2016-01-01 → 2017-12-31 | 68,538 | boosters, weather imputer |
+| calibrate | 2018 | 34,974 | band factor and **every** rule threshold |
+| test | 2019 | 34,922 | one evaluation with injected anomalies |
+| replay | 2020-01-01 → 2021-05-31 | 48,172 | streamed through the live system |
+
+`temporal_split()` refuses overlapping or out-of-order bounds. Testing on a full year rather than a quarter matters: a draft plan tested on 2020-Q1, which would have evaluated every anomaly type in winter only.
+
+## 4. Feature engineering
+
+Fourteen features, all computable from the timestamp and the current weather observation. Nothing about the demand itself.
+
+### 4.1 Calendar, in local time
+
+Cyclic quantities are encoded as a point on a circle so that the model's notion of distance matches reality — 23:45 is next to 00:00, December is next to January, Sunday is next to Monday:
+
+```
+sin_tod, cos_tod = sin(2π·m/1440), cos(2π·m/1440)     m = minute of day (0…1439)
+sin_dow, cos_dow = sin(2π·d/7),    cos(2π·d/7)        d = day of week
+sin_doy, cos_doy = sin(2π·y/365.25), cos(2π·y/365.25) y = day of year
+```
+
+Trees can split a raw hour just fine; the reason to encode cyclically is the wrap-around — a raw `hour` feature has to spend two splits to isolate "23:00–01:00", and a raw `day_of_year` places 31 December and 1 January at opposite ends of the range. Minute-of-day is used rather than hour plus a minute one-hot (the notebook's approach) because a single smooth variable lets the model place a split at 07:15 if that is where the building wakes up.
+
+`is_holiday` (US federal, via the `holidays` package) and `is_weekend` are explicit flags. Holidays cover 2,208 training slots (23 days). Both are computed on the *local* date — 4 July 23:00 local is 5 July 03:00 UTC, and a test guards that it still counts as the holiday.
+
+### 4.2 Weather
+
+The seven Open-Meteo variables enter directly, plus two derived terms:
+
+```
+hdd = max(18 − T, 0)      heating degrees: how far below the comfort band it is
+cdd = max(T − 22, 0)      cooling degrees: how far above
+```
+
+Buildings respond to temperature piecewise: nothing between roughly 18 and 22 °C, then linearly in each direction. Giving the model the two half-lines directly means it does not have to discover the kink from splits on raw temperature, and it makes the two behaviours separable when one of them is weak. Training temperatures span −23.3 to 33.9 °C, so both regimes are well covered.
+
+Wind speed and gusts, humidity, dew point and pressure are kept even though several are weak: they are cheap, the model can ignore them, and pressure and humidity correlate with the cloud cover and precipitation that the coarse `precip_mm` measures badly. The 45-category `Condition` text from the station export ("Light Snow / Windy") was dropped: the information it carries is in the numeric variables, and a categorical with 45 levels from a scraped source is a maintenance liability.
+
+### 4.3 Missing weather
+
+`SeasonalMeanImputer` fills a missing variable with the **training-period mean for that (month, hour) in local time**, falling back to the global training mean for a cell never seen in training. Weather is seasonal and diurnal; a 7 a.m. January temperature imputed from a January-7-a.m. mean is a far better guess than a global mean, and far better than carrying forward yesterday's value across a multi-day gap. The imputer is fit on 2016–17 only and is part of the saved model artefact. In live operation the scorer also uses it when the weather feed is stale (§10.2).
+
+### 4.4 What is deliberately not a feature: demand lags
+
+A lag feature (`kw` fifteen minutes ago, same slot yesterday, same slot last week) is the single most predictive input for a forecaster. It was excluded on purpose, and the choice is the central design decision of the model:
+
+- A model with lags answers *what will the next reading be*; a context model answers *what should this building be drawing now*. The second is the question a sustainability programme asks.
+- With lags, a sustained anomaly becomes the model's "normal" within a few readings — the +30 % overnight HVAC event, the one that costs the most kWh, is exactly the one a lag model stops seeing.
+- Everything a lag model would have contributed for slow level changes is provided by the level tracker (§7.2), which adapts over days rather than minutes and is robust to anomalies by construction.
+
+The cost is sensitivity to *small* offsets: the context model's band (σ ≈ 9 kW, ~4 % of load) is wider than a lag model's would be, so offsets under roughly 8 % are below detection by design. A second, lag-based model behind the same `Detector` interface is the documented extension if that ever matters (§13).
+
+### 4.5 What the model actually used
+
+Linear correlations with demand on the training set and LightGBM gain importance for the median booster:
+
+| Feature | r with kW | Gain share (q50) |
 |---|---|---|
-| Temperature | 0.984 | MAE 1.95 °C |
-| Dew point | 0.983 | |
-| Pressure | 0.978 | constant ~25 hPa offset (station altitude vs surface pressure) — irrelevant to a tree model |
-| Humidity | 0.795 | |
-| Wind speed | 0.767 | |
-| Gusts | 0.621 | the station column is mostly zeros; the export is the unreliable one |
-| Precipitation | 0.310 | reanalysis precipitation is coarse; treated as a weak feature |
+| sin_tod | −0.641 | **37.6 %** |
+| cos_doy | 0.080 | 12.2 % |
+| sin_doy | 0.083 | 11.6 % |
+| sin_dow | 0.247 | 10.9 % |
+| dewpoint_c | −0.076 | 5.3 % |
+| pressure_hpa | −0.031 | 5.0 % |
+| temp_c | 0.029 | 4.7 % |
+| cos_tod | 0.036 | 2.8 % |
+| hdd | 0.034 | 2.0 % |
+| gust_kph | 0.112 | 1.7 % |
+| rh | −0.265 | 1.7 % |
+| cos_dow | −0.101 | 1.5 % |
+| wind_kph | 0.055 | 1.4 % |
+| is_holiday | −0.081 | 1.0 % |
+| cdd | 0.215 | 0.4 % |
+| precip_mm | −0.005 | 0.3 % |
+| is_weekend | −0.291 | 0.0 % |
 
-The CSVs remain as an offline fallback behind a unit-normalising loader (°F→°C, inHg→hPa, mph→km/h, in→mm). Hourly observations are aligned to the 15-minute grid by rounding to the hour and forward-filling at most four slots; an hour with no observation stays `NaN` for the imputer.
+Three things worth noticing. Time of day dominates, as it should. The day-of-year pair carries 24 % of the gain while its linear correlation is near zero — seasonality is real but non-monotonic, which is precisely the case where trees beat a linear model and where cyclic encoding earns its place. And `is_weekend` has zero gain despite a −0.29 correlation: the model gets the same information from `sin_dow`, so the flag is redundant (harmless, and kept for readability of SHAP explanations).
 
-### 2.3 Splits
+Weather matters less than intuition suggests for this building: temperature, dew point and pressure together take ~15 % of the gain. That is consistent with an evening-peaking load driven by occupancy rather than a chiller-dominated office.
 
-| Purpose | Period | Used for |
-|---|---|---|
-| Train | 2016-01 → 2017-12 | boosters, weather imputer |
-| Calibrate | 2018 | band width, **all** rule thresholds |
-| Test | 2019 (full year) | one evaluation with injected anomalies |
-| Replay | 2020-01 → 2021-05 | streamed through the live system as if it were a meter |
+## 5. Model selection
 
-2015 is excluded (different regime). Testing on a full year matters: an earlier draft tested on 2020-Q1 only, which would have evaluated every anomaly type in winter.
+### 5.1 The requirement
 
-## 3. Features
+The detector needs, for every 15-minute slot, an **expected value** and a **normal range** given the context — and it needs them to be explainable in one sentence to a non-engineer. That requirement rules out the family the project started with.
 
-The model is **context-only** by design: it answers *"what should this building draw right now?"*, not *"what will the next reading be?"*. Demand lags were deliberately excluded. A model with lags is a better forecaster, but a sustained anomaly becomes its "normal" within a few readings — precisely the anomaly a sustainability programme cares about most.
+### 5.2 Candidates
 
-Fourteen features:
+**A — Residual-based (chosen).** Predict conditional quantiles of demand from context with gradient-boosted trees; the anomaly signal is the signed, standardised residual of the observation against the median, with the 5–95 % quantiles giving the band.
 
-- **Calendar (local time)** — sin/cos of minute-of-day, day-of-week and day-of-year (cyclic encoding: 23:45 and 00:00 are neighbours, December is next to January); `is_holiday` (US federal); `is_weekend`.
-- **Weather** — the seven Open-Meteo variables plus **heating degrees** `max(18 − T, 0)` and **cooling degrees** `max(T − 22, 0)`: the parts of temperature a building actually responds to.
+**B — Autoencoder (the incumbent).** Reconstruction error of a window plus context. Direction-blind (§2); the threshold is a number on an error scale nobody can interpret; and its inputs include the demand itself, so it learns neighbours. It *can* catch within-hour shape anomalies (an oscillating compressor) that a point model cannot. Kept as a possible second signal, not the core.
 
-Missing weather is filled by a `SeasonalMeanImputer`: the training-period mean for that (month, hour) in local time, with a global fallback. It is fit on the training years only and serialised with the model.
+**C — Ensemble A + B.** Marginally more recall on a single meter for twice the operational surface and two thresholds to explain.
 
-## 4. Model selection
+**Why boosting rather than a neural forecaster** (LSTM, TFT, N-HiTS): ~70,000 training rows of tabular features is the regime where gradient boosting is consistently at or above neural models in the forecasting literature and in the M5 competition; quantile loss gives calibrated bands natively where an LSTM would need a quantile head or conformal wrapper; SHAP on trees is exact and takes microseconds, which is what makes the alert text possible; and training takes about ten seconds on a laptop CPU, which makes nightly retraining a non-event. Deep models earn their place with many buildings (a global model) or sub-minute data — neither applies here.
 
-### 4.1 Candidates considered
+**Why quantile regression rather than mean regression plus a residual σ.** The band should be heteroscedastic: the building is more variable at 19:00 than at 04:00, and more variable in a heat wave than in mild weather. Three quantile boosters learn that structure directly. On the calibration year the raw half-width's 10th–90th percentile range is 7.8–16.6 kW around a median of 9.1 — a factor of two between quiet and busy contexts that a constant σ would get wrong in both directions.
 
-- **A. Residual-based (chosen).** Predict expected demand for the context; the anomaly is the signed, standardised residual. Gradient-boosted quantile regression.
-- **B. Autoencoder (the incumbent).** Reconstruction error on hourly windows plus context. Direction-blind; the threshold is opaque; the notebook's own correlation table showed the windowed demand values dominate the reconstruction, i.e. it mostly learned *demand ≈ its neighbours*.
-- **C. Ensemble of A and B.** Marginal recall gain on a single meter for double the operational surface.
+### 5.3 The model
 
-Reasons A wins for this data: ~70k training rows of tabular features is the regime where gradient boosting is consistently at or above neural models; quantile loss gives calibrated bands natively; SHAP on trees is exact and cheap, which is what makes an alert explainable ("expected 231 kW because: time of day +38, weekday +12, temperature −6"); training takes ~10 s on CPU, so nightly retraining is trivial.
-
-### 4.2 The model
-
-Three LightGBM boosters with `objective="quantile"` at α = 0.05, 0.50, 0.95 (800 trees, learning rate 0.03, 31 leaves, `min_child_samples` 50). Predicted quantiles are re-sorted row-wise so `q05 ≤ q50 ≤ q95` (quantile crossing fix).
-
-Calibration-year (2018) fit: MAE 9.9 kW on a 235 kW mean (4.2 %). Raw 5–95 % band coverage on 2018: **0.60** — the model is overconfident out of year.
-
-### 4.3 Calibration
-
-One scalar `c` widens the raw band until it covers the target 90 % on the calibration year:
+Three LightGBM regressors, `objective="quantile"` at α = 0.05, 0.50, 0.95; 800 trees, learning rate 0.03, 31 leaves, `min_child_samples = 50`. The pinball loss the model minimises:
 
 ```
-half = c · (q95 − q05) / 2        band = q50 ± half
-σ    = half / 1.645               z    = (y − q50) / σ
+L_α(y, q) = α·(y − q)          if y ≥ q
+          = (α − 1)·(y − q)    otherwise
 ```
 
-Coverage-based calibration of a raw quantile band is standard (split-conformal in spirit); what turned out to matter is **which residual it is fit on** — see §5.3.
+Predicted quantiles are re-sorted row-wise so that `q05 ≤ q50 ≤ q95` (quantile crossing is rare but real with independently fitted boosters). Fit on the training years, the median model's calibration-year error is **MAE 9.9 kW** on a 235 kW mean (4.2 %), pinball loss 4.97 at the median.
 
-## 5. From residual to alert
+## 6. Calibration: from quantiles to a band
 
-### 5.1 First attempt — and why it failed
-
-The obvious detector: `SPIKE` if |z| > 4 on one slot; two-sided **CUSUM** on z (k = 0.5, h = 5) for sustained deviation; `STUCK` for eight identical consecutive readings.
-
-On the held-out year it produced **12 false alarms per week**. Diagnosis on 2019 scores:
-
-- lag-1 autocorrelation of z = **0.80**; lag-96 (one day) = 0.45;
-- monthly mean z ranged from **−1.48 (January) to +0.57 (November)**;
-- daily-mean z had σ = 0.88; 96 of 366 days had |mean z| > 1.
-
-The building's level, relative to a model trained on 2016–17, wanders by more than a σ from month to month. CUSUM with k = 0.5 correctly accumulates any persistent 0.5σ bias — and flagged entire months. A manager cannot act on "January was low".
-
-Two textbook parameters were also wrong for this cadence: CUSUM with k = 0.5, h = 5 has an average run length of ~465 steps two-sided on *white noise* — at 96 readings a day, that is a false sustained alert every five days per direction before any real structure is considered.
-
-### 5.2 Level tracking
-
-The fix that kept the design simple: a slow, robust **EWMA of the kW residual** (half-life 3 days) tracks the building's current level relative to the model. Expected demand, the band and z are all computed relative to it:
+Independently fitted quantile models are almost always overconfident out of sample. On 2018 the raw 5–95 % band covered only **59.9 %** of readings. Calibration adds one scalar `c` chosen so the band covers the target 90 % on the calibration year:
 
 ```
-expected = q50 + level_kw          z = (y − expected) / σ
-level_kw += α · clip(y − expected, ±2σ)
+half = c · (q95 − q05) / 2         lower, upper = expected ∓ half
+σ    = half / 1.645                z = (y − expected) / σ
 ```
 
-Design notes that came out of testing rather than theory:
+Dividing by 1.645 rescales the calibrated half-width to a standard-normal-equivalent σ, so `|z| > 4` means what it sounds like. A per-(hour, weekday) σ table and a full split-conformal procedure were considered and rejected: one scalar on top of heteroscedastic quantiles captured the structure, and a test asserts calibration-year coverage is 0.90 ± 0.02.
 
-- **Track in kW, not in z.** A first version tracked the bias in z-units; because the band is heteroscedastic (σ varies with context), `bias·σᵢ` gave a different kW correction at every slot and left a ±2σ daily oscillation. A level shift is a kW quantity.
-- **Clip the update at ±2σ.** Without clipping, a +30 % offset lasting six hours pulled the level up enough that the return to normal produced a *rebound* `SUSTAINED_LOW` alert. With clipping, an anomaly can move the level by at most 2σ·α per slot (~0.14σ over a six-hour event), while a permanent shift is still absorbed within a week or two.
-- **Winsorise the CUSUM input at the spike threshold.** Otherwise a single 30σ slot trips CUSUM by itself and gets labelled "sustained". Clipped at 5, one slot contributes at most 3.5, so `SUSTAINED` genuinely means ≥ ~1 hour.
-- **`SUSTAINED` supersedes `SPIKE` in the same direction.** A spike that keeps going *is* the sustained event; the manager should see one alert, not two.
+**What the residual is measured against turned out to matter more than the method.** The first version fit `c` on the raw residual `y − q50` and got **c = 2.12**. After the level tracker was introduced (§7.2) and calibration was made to use the same level-adjusted residual the scorer uses, `c` fell to **1.59**. The difference — a third of the band's width — was the year-scale level drift that the raw residual contained and the tracker removes. Full story in §7.3.
 
-### 5.3 Calibrating on the same residual the scorer uses
+## 7. From residual to alert: the rules, and how they failed first
 
-The first retrain run (as-of September 2020) calibrated its band on March–May 2020 — the lockdown — and produced a band covering **100 %** of readings that detected nothing. The promotion gate refused it, which is what the gate exists for, but the cause was a design inconsistency: the scorer judged *level-adjusted* residuals while the calibrator was fit on *raw* ones, so a regime break inside the calibration window inflated the band.
+### 7.1 The first attempt and its diagnosis
 
-Both now use one `track_level()` routine; the calibration factor is fit on `y − level` (with a fixed-point iteration because the clipping depends on σ, which depends on the factor). A unit test asserts that reported calibration coverage equals what `Detector.score` realises on the same frame across a −30 kW mid-window break (they now agree to within 0.015; before the fix they differed by 0.04). Side effect: the 2018 factor fell from **2.12 to 1.59** — the raw residual had been inflated by exactly the level drift the tracker removes.
+The obvious detector: `SPIKE_HIGH/LOW` when `|z| > 4` on a single slot; a two-sided **CUSUM** on z (allowance k = 0.5, threshold h = 5) for sustained deviation; `STUCK` for eight identical consecutive readings. On the held-out year it fired **12 false alarms per week** — 626 alert events, 9,462 slots of `SUSTAINED_LOW` alone.
 
-### 5.4 Threshold selection — on 2018 only
+Diagnosis on the 2019 z series:
 
-A small grid over k ∈ {1.0, 1.5, 2.0}, h ∈ {12, 16}, spike threshold ∈ {4, 5}, evaluated with injected anomalies on the **calibration** year, never on 2019:
+- lag-1 autocorrelation **0.80**, lag-96 (one day) 0.45;
+- monthly mean z from **−1.48 in January to +0.57 in November**; overall mean −0.42 — 2019 ran lower than 2016–17 in the same contexts;
+- daily-mean z had σ = 0.88; on 96 of 366 days the day's mean |z| exceeded 1.
 
-| k | h | spike | FA / week | recall: offset · dropout · spike · drift · schedule |
+A context-only model trained on 2016–17 cannot know that the building runs 1.5σ lower in January 2019 than in January 2017. CUSUM with k = 0.5 correctly accumulates any persistent bias above 0.5σ and flagged entire months. Correct mathematics, useless alerts.
+
+Two textbook defaults were also wrong for this cadence. Two-sided CUSUM with k = 0.5, h = 5 has an in-control average run length of roughly 465 steps on *white noise*. At 96 readings a day that is a false "sustained" alert every five days in each direction before any real structure is considered — the unit test that fed 1,000 N(0,1) values into it failed, which is how the defect was found. And a single enormous reading (z = 30) tripped CUSUM on its own and was labelled "sustained".
+
+### 7.2 Level tracking
+
+The fix that preserved the one-model design: a **slow, robust exponentially weighted moving average of the kW residual** tracks the building's current level relative to the model. Expectation, band and z are computed relative to it:
+
+```
+expected  = q50 + level_kw
+z         = (y − expected) / σ
+level_kw += α · clip(y − expected, −2σ, +2σ)        α = 1 − 0.5^(1 / (3 days · 96))
+```
+
+Four properties, each the result of a failed test rather than a prior:
+
+1. **Track in kW, not in z.** The first version tracked the bias in σ-units. Because σ varies with context (§5.2), `bias·σᵢ` produced a different kW correction at every slot and left a ±2σ daily oscillation after a pure level shift. A level shift is a kW quantity.
+2. **Clip each update at ±2σ.** Unclipped, a +30 % offset lasting six hours pulled the level up by ~0.9σ, so the return to normal produced a *rebound* `SUSTAINED_LOW` alert. Clipped, an anomaly can move the level by at most 2σ·α per slot — about 0.14σ over a six-hour event — while a permanent −20 kW shift is still fully absorbed within one to two weeks.
+3. **A 3-day half-life.** Long enough that no realistic anomaly is absorbed before it alerts; short enough that a genuine regime change (a retrofit, a lockdown) stops alerting within a week. Anything persisting beyond that *is* the new normal, and the nightly retrain will learn it properly.
+4. **Winsorise the CUSUM input at the spike threshold.** With z clipped to ±5 before accumulation and k = 1.5, one slot contributes at most 3.5 toward h = 12, so `SUSTAINED` genuinely means at least an hour of deviation and a single spike can never masquerade as one.
+
+One more rule of alert hygiene: **`SUSTAINED` supersedes `SPIKE` in the same direction.** A spike that keeps going *is* the sustained event; the manager should see one alert, and the spike record is closed when the sustained one opens.
+
+### 7.3 Calibrating on the same residual the scorer scores
+
+This inconsistency was found by the promotion gate, not by inspection. The first automated retrain (as-of 2020-09-01) calibrated its band on March–May 2020 — the lockdown. Raw residuals in a regime break are enormous, so `c` blew up and the candidate's band covered **100 %** of readings and detected nothing. The gate refused it (§11.3).
+
+The cause: the scorer judged *level-adjusted* residuals while the calibrator was fit on *raw* ones. Both now share one `track_level()` routine; the calibration factor is fit on `y − level` with a three-step fixed-point iteration (the tracker's clipping depends on σ, which depends on `c`). A unit test asserts that the coverage reported at calibration equals the coverage `Detector.score()` realises on the same frame across a −30 kW mid-window break; they now agree within 0.015, where before the fix they differed by 0.04. The same test suite pins that batch scoring and one-reading-at-a-time scoring produce identical output, so what is evaluated is what runs.
+
+### 7.4 Threshold selection — on 2018 only
+
+With level tracking in place, a small grid was evaluated with injected anomalies on the **calibration** year. 2019 was not touched during tuning.
+
+| k | h | spike z | FA/week (clean 2018) | recall: offset · dropout · spike · drift · schedule |
 |---|---|---|---|---|
 | 1.0 | 12 | 4 | 2.57 | 1.0 · 1.0 · 1.0 · 1.0 · 1.0 |
 | 1.0 | 16 | 5 | 1.98 | 1.0 · 1.0 · 1.0 · 1.0 · 1.0 |
 | **1.5** | **12** | **5** | **1.11** | **1.0 · 1.0 · 1.0 · 1.0 · 0.83** |
+| 1.5 | 16 | 5 | 1.02 | 1.0 · 1.0 · 1.0 · 1.0 · 0.83 |
 | 2.0 | 12 | 5 | 0.61 | 1.0 · 1.0 · 1.0 · 1.0 · 0.83 |
 
-`k` is the dominant lever. k = 1.5 was chosen over 2.0 to keep sensitivity to offsets around +10 % — the overnight-waste case — at the cost of ~0.5 more false alarms a week.
+`k` — the allowance, how much persistent bias CUSUM tolerates — is the dominant lever; `h` and the spike threshold are second-order. k = 1.5 was chosen over 2.0 to keep sensitivity to offsets around +10 % (the overnight-waste case), accepting roughly half an extra false alarm a week. Final rules: `spike_z = 5`, `cusum_k = 1.5`, `cusum_h = 12`, `stuck_slots = 8`, alerts close after 8 consecutive in-band slots, level half-life 3 days.
 
-## 6. Evaluation without labels
+## 8. Evaluation without labels
 
-### 6.1 Injection
+### 8.1 Injection
 
-Six anomaly types are injected into the *raw* series before scoring (so lags, level tracking and imputation all see exactly what production would):
+Anomalies are injected into the **raw** demand series before anything else runs, so imputation, level tracking and the rules all see what production would see. Six types, chosen to span what a facilities team actually encounters:
 
-| Type | What it simulates | Injected as |
-|---|---|---|
-| spike | transient load / meter glitch | one slot × 1.3–2.0 |
-| sustained_offset | HVAC or lighting left on | +15–40 % for 2–12 h |
-| dropout | equipment failure | −30–60 % for 1–6 h |
-| slow_drift | degradation | +1 %/day ramp over 14 days |
-| schedule_shift | building running its day profile at night | one day's readings rolled by 6 h |
-| stuck_meter | comms/metering fault | constant value for 2–6 h |
+| Type | Simulates | Injected as | Detection challenge |
+|---|---|---|---|
+| spike | transient load, meter glitch | one slot × U(1.3, 2.0) | must not be swallowed by smoothing |
+| sustained_offset | HVAC/lighting left on | +U(15, 40) % for 2–12 h | the core waste case |
+| dropout | equipment failure | −U(30, 60) % for 1–6 h | direction |
+| slow_drift | degradation, fouling | linear ramp to +14 % over 14 days | the hardest: must not be absorbed as level |
+| schedule_shift | day profile running at night | one day's readings rolled by 6 h | net energy unchanged — only context reveals it |
+| stuck_meter | comms/metering fault | constant value for 2–6 h | not a deviation at all |
 
-Three of each per seed, five seeds, placed at least a day apart (longest first, so 14-day drifts do not get squeezed out) — 90 labelled events per evaluation on top of the year's real behaviour.
+Three of each per seed, five seeds, placed at least a day apart (longest types first, so fourteen-day drifts are not squeezed out by earlier short placements) — 90 labelled events per evaluation, on top of a year of real behaviour. The notebook's Burr/Fisk generator survives as an optional seventh type.
 
-### 6.2 Metrics
+### 8.2 Metrics
 
-Event-level, not slot-level: a labelled event is *detected* if any alert overlaps it (±1 h tolerance). Reported per type: recall, median time-to-detect, and — on the clean, un-injected year — **false alarms per week** and **band coverage**. Precision and F1 are computed but not used for decisions: with three injected events per type against a year of real alerts they only proxy the false-alarm count.
+Event-level, not slot-level. A labelled event is **detected** if any alert event overlaps it within ±1 hour; **time-to-detect** is the delay from onset to the first overlapping alert slot. On the clean, un-injected year: **false alarms per week** (alert events not overlapping any label) and **band coverage** (share of readings inside the band).
 
-### 6.3 Baseline
+Precision and F1 are computed and logged but are *not* used for decisions. With three injected events per type against a full year of real alerts, F1 is a proxy for the false-alarm count with extra steps; recall per type, false alarms per week, time-to-detect and coverage are the four numbers an operator would ask for.
 
-A **seasonal-naive** detector — expected = same slot last week, σ per (weekday, slot) from the fit period — run through the *same* calibrator and the *same* alert rules. Only the source of the expectation differs, so the comparison isolates what the model adds.
+### 8.3 Baseline
 
-### 6.4 Result on the held-out year (2019)
+A **seasonal-naive** detector: expected demand = the reading at the same slot last week (falling back to the (weekday, slot) mean), σ = the (weekday, slot) standard deviation from the fit period — run through the *same* calibrator and the *same* alert rules. The only thing that differs is where the expectation comes from, so the comparison isolates what the model contributes. This baseline is strong on a stable building and is the one most practitioners would reach for first.
+
+### 8.4 Guardrails
+
+- Thresholds were set on 2018; 2019 was scored for the report.
+- Injection parameters are randomised with fixed seeds and were not adjusted to what the detector catches.
+- The whole 2016–2021 series was scored once as a sanity check for the two regime changes nature labelled (§9.3); no parameter was changed as a result.
+- Disclosure: the 2019 evaluation was run **twice** — before and after the calibration change of §7.3 — so the final 2019 numbers should be read as post-one-revision rather than pristine.
+
+## 9. Results
+
+### 9.1 Held-out year, 2019
 
 | | Detector | Seasonal-naive |
 |---|---|---|
-| False alarms / week (clean) | **1.73** | 0.75 |
-| Band coverage (clean) | 0.81 | 0.88 |
-| Recall: spike | 1.00 | 1.00 |
-| Recall: sustained offset | 1.00 (detected in 12 min) | 1.00 (54 min) |
-| Recall: dropout | 1.00 | 1.00 |
-| Recall: slow drift | 0.93 (~2.5 days) | 0.80 (~6 days) |
-| Recall: schedule shift | 1.00 | 0.80 |
-| Recall: stuck meter | 1.00 | 1.00 |
+| False alarms / week, clean | **1.73** | 0.75 |
+| Band coverage, clean | 0.81 | 0.88 |
+| Recall — spike | 1.00 | 1.00 |
+| Recall — sustained offset | 1.00 · **12 min** to detect | 1.00 · 54 min |
+| Recall — dropout | 1.00 · 0 min | 1.00 · 0 min |
+| Recall — slow drift | **0.93** · ~2.5 days | 0.80 · ~6 days |
+| Recall — schedule shift | **1.00** · ~4.4 h | 0.80 · ~7.4 h |
+| Recall — stuck meter | 1.00 · 96 min | 1.00 · 105 min |
 
-Reading it honestly:
+Read carefully:
 
-- The detector catches everything the baseline catches, catches drift and schedule shifts the baseline misses, and reacts 4–5× faster to offsets — within the three-per-week budget.
-- The baseline is *quieter*. Its expectation is last week's reading, which already contains the building's current level; it pays for that with blindness to anything that also happened last week and slower reaction.
-- **Coverage 0.81** for a band calibrated to 0.90 on 2018 is a real finding, not a rounding issue: a model frozen at end-2018 fits 2019 worse. It is the quantitative argument for §8.
+- Within the 3/week budget, the detector catches everything the baseline catches, catches drift and schedule shifts the baseline misses, and reacts four to five times faster to offsets. Schedule shift is the case that separates them most cleanly: the baseline compares to last week's reading at the same slot, so a building running its day profile at night looks plausible if it did so last week too; only the context model knows that 02:00 on a Tuesday should be quiet.
+- The baseline is *quieter* — 0.75 false alarms a week — because "last week's reading" already contains the building's current level. It pays with blindness to anything that also happened last week and with slower reaction.
+- **Coverage 0.81** for a band calibrated to 0.90 on 2018 is a real finding: a model frozen at end-2018 fits 2019 measurably worse (the raw quantile band's calibration-year coverage was 0.60; the level tracker and factor bring it to 0.90 in-year, 0.81 the year after). It is the quantitative case for retraining (§11).
 
-A sanity check with the only "labels" nature provided: scoring 2016–2021 with the 2018-calibrated model shows almost nothing in the training years, sparse alerts in 2018–19, and `SUSTAINED_LOW` dominating **March–April 2020** — the lockdown — followed by a wave of `SUSTAINED_HIGH` in May as partial reopening reads as high against the newly learned low level. Nobody told the model about COVID.
+### 9.2 Threshold-tuning result, 2018 (the calibration year)
 
-## 7. Deployment
+For completeness — the chosen rules on the year they were tuned on: 1.11 false alarms/week, coverage 0.90, recall 1.0 on five types and 0.83 on schedule shift. The 2019 numbers are worse on false alarms and coverage, as an honest out-of-year result should be.
 
-### 7.1 Shape
+### 9.3 The only natural labels: two regime changes
+
+Scoring 2016–2021 with the 2018-calibrated model and counting alert slots by month gives a picture the model was never told about: almost nothing in the training years (a handful of spikes), sparse alerts through 2018–19, then `SUSTAINED_LOW` exploding in **March 2020 (939 slots) and April (1,260 slots)** — the lockdown — before the level tracker adopts the new regime. Alert density stays elevated through 2020–21 with the frozen model, the qualitative form of the coverage finding above.
+
+### 9.4 The replay through the live system
+
+The complete 2020-01 → 2021-05 period — real readings only, no injection — streamed over MQTT into the deployed stack: **48,173 score rows for 48,172 readings** (the extra row is a boundary slot), zero message loss, ~15 ms scoring latency per reading. Alerts per month:
+
+| Month | Alerts | LOW | HIGH | Excess kWh | Note |
+|---|---|---|---|---|---|
+| 2020-01 | 14 | 6 | 8 | 102 | ~3/week, consistent with 2019 evaluation |
+| 2020-02 | 9 | 1 | 8 | 211 | |
+| 2020-03 | 16 | **13** | 3 | 33 | lockdown begins; mean alert duration 34 h |
+| 2020-04 | 20 | **14** | 6 | 54 | |
+| 2020-05 | 31 | 2 | **29** | 816 | partial reopening reads as *high* against the newly learned low level |
+| 2020-06 → 2021-05 | 8–26 / month | | | | elevated vs 2019 with a model two years stale |
+
+The March–May 2020 sequence is exactly what a manager would want explained on the dashboard: first "the building is running far below what it should" for weeks, then "it is running above what it just was". Whether the second wave is *useful* depends on the question being asked — it is correct relative to the recent level, and it is the strongest argument in the project for retraining on a trailing window rather than running a frozen model.
+
+## 10. Deployment
+
+### 10.1 Shape
 
 Five always-on containers, two on demand, one image, one `docker compose up`:
 
 ```
 Meter / Open-Meteo ──MQTT──▶ mosquitto ──▶ Scorer ──▶ TimescaleDB ──▶ Grafana ──▶ building manager
-                                             ▲                │
-                                     MLflow registry ◀── Trainer ◀─── history
+                                              ▲                │
+                                      MLflow registry ◀── Trainer ◀── history
 ```
 
-- **MQTT is the only contract.** `building/<meter_id>/demand` with `{"meter_id", "ts" (ISO-8601 with offset), "kw"}`, QoS 1. A real meter gateway and the replay simulator publish the same shape; naive timestamps are rejected so nobody guesses a time zone.
-- **`Detector.score()` is the single scoring path** for offline evaluation, the live scorer and the MLflow pyfunc wrapper; a test pins that batch scoring and one-reading-at-a-time scoring produce identical output. What was measured in §6 is what runs.
-- **Scorer** is a transport- and storage-agnostic core behind a `Sink` protocol (unit-tested with an in-memory sink), wrapped by a thin MQTT consumer and a FastAPI `/health` + `/reload-model`. Per-meter state: level, CUSUM sums, open alerts. Stale weather (> 3 h) degrades to seasonal means and is flagged, never fatal. A reading more than a day older than the last is treated as a replay restart and resets that meter's state.
-- **Alerts** are opened and closed on transitions and carry observed vs expected kW, peak z, accumulated excess kWh → CO₂e and cost, and the top-3 SHAP drivers of the expectation.
-- **Replay** streams the untouched 2020-01 → 2021-05 readings at a chosen speed. Full backfill of 48,172 readings: every one scored (48,173 rows; the +1 is a boundary slot), ~15 ms per reading, no message loss once the broker queue was made unbounded.
+Choices worth defending:
 
-### 7.2 Registry and promotion
+- **MQTT as the single integration contract.** Topic `building/<meter_id>/demand`, payload `{"meter_id", "ts", "kw"}` with an ISO-8601 timestamp *including offset* (naive timestamps are rejected — nobody should guess a time zone twice), QoS 1. Weather on `weather/<station_id>/obs` with the seven metric variables. A real meter gateway and the replay simulator publish identical messages; swapping mosquitto for a managed broker is a `.env` change.
+- **TimescaleDB rather than a document store.** Every question the dashboard asks is a time-range aggregate over 15-minute rows; hypertables and plain SQL are the natural fit, and Grafana's Postgres datasource needs no glue. Three hypertables (`readings`, `weather_obs`, `scores`) and two tables (`alerts`, `model_versions`).
+- **One scoring path.** `Detector.score()` serves offline evaluation, the live scorer and the MLflow pyfunc wrapper.
+- **No Prometheus, no Evidently.** Service health and model health are SQL over `scores` (§11.1). A second metrics stack would have been the first violation of the "one database" goal.
 
-Models are logged to MLflow as a pyfunc with the boosters, imputer, calibration factor and rules bundled; aliases `@staging` and `@production` replace deprecated stages. The scorer loads `@production` at start, polls the alias every ten minutes and hot-swaps. On swap the level bias — which is relative to the *old* model's q50 — is reset and CUSUM is rebuilt with the new rules; a test drives an adapted old model, swaps in a retrained one and asserts that quiet days produce no alerts (they did before this fix, reproduced by the code review).
+### 10.2 The scorer
 
-### 7.3 Lessons from running it
+A transport- and storage-agnostic `ScorerCore` behind a `Sink` protocol (unit-tested with an in-memory sink), wrapped by a thin paho-mqtt consumer and a FastAPI app exposing `/health` and `/reload-model`. Per meter it keeps the level, CUSUM sums, stuck-run counter and open alerts; one lock guards all state.
 
-Things that only showed up when data actually flowed: macOS AirPlay squats on port 5000 (MLflow moved to 5001); another Postgres owned 5432; Grafana's table panel silently fails to render without its full default option block; a 10-second dashboard refresh cancels TimescaleDB queries before first paint; mosquitto's default 1,000-message queue drops QoS 1 messages when a 30,000× replay outruns a ~25 reading/s scorer.
+Behaviour under the failure modes that actually occurred:
 
-## 8. Monitoring and retraining
+- **Stale weather** (> 3 h old or absent) → features fall back to the seasonal-mean imputer and the score row is flagged `weather_stale`; never a crash.
+- **Out-of-order or duplicate readings** → dropped with a warning. A reading more than a day *older* than the last one is treated as a replay restart and resets that meter's state — found when a truncated database plus a running scorer rejected 1,439 readings.
+- **Database restart** → the sink reconnects once and retries; before this fix (a code-review finding) every reading after a Postgres restart was silently dropped forever while the container stayed "healthy".
+- **Fast replays** → mosquitto's default 1,000-message per-client queue dropped 75 % of readings when a 1,000,000× replay outran a ~25 reading/s scorer; the queue is now unbounded and the sustainable backfill speed is ~30,000× (17 months in ~40 minutes).
+- **Every alert record** carries observed vs expected kW, peak z, accumulated excess kWh → CO₂e → cost, the model version, and the top-3 SHAP drivers of the expectation ("time of day +38 kW, weekday +12, temperature −6") so the manager sees *why the model expected what it expected* — the explanation of the baseline, not the cause of the anomaly.
 
-**Model health is SQL on the `scores` table**, on the same dashboard the manager uses: seconds since last reading, scoring latency p95, 24-hour band coverage, 24-hour MAE, stale-weather share, model version. Three provisioned alert rules: an anomaly is open; no score for 30 minutes; coverage under 80 % for a day. No separate metrics stack — the design goals were simplicity and observability by construction, and every score row already carries `model_version`.
+### 10.3 Model registry and hot-swap
 
-**Retraining** runs on a trailing 24-month window: train on the oldest 18 months, calibrate on the next three, evaluate on the most recent three with injected anomalies — against the seasonal-naive baseline *and* the current production model. The **gate** promotes only if recall per type is ≥ 0.9× the baseline's (or ≥ 0.8 absolute — with ten injected events per type recall is quantised to 0.1 and one miss must not block a promotion), clean false alarms ≤ 3/week, coverage within 0.80–0.97, and no recall regression against production. In this project the gate has refused every candidate so far, each time for a defensible reason (a band that covered everything; a lockdown-calibrated model less sensitive to offsets than the 2018 one). A gate that never says no is not a gate.
+Models are logged to MLflow as a pyfunc bundling the three boosters, the imputer, the calibration factor and the rules; aliases `@staging` and `@production` are used (stages are deprecated). The scorer loads `@production` at start-up, polls the alias every ten minutes and hot-swaps without restart.
 
-**Drift** is watched through coverage and MAE rather than a distribution-drift library: for a single meter, the band's realised coverage *is* the drift statistic that matters.
+A code-review reproduction showed that a naïve swap carried the **old** model's level bias — a kW offset relative to the *old* model's median — into the new one, producing nine spurious alerts on a quiet day right after a promotion. On swap the level is now reset (the new model re-learns it within its half-life) and CUSUM is rebuilt with the new model's rules while carrying its sums; open alerts and the last timestamp survive. A test drives the whole sequence.
 
-## 9. Limits and open questions
+### 10.4 Replay as the deployment test
 
-- **Units and factors.** `Demand` is assumed to be kW; the CO₂e factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders. For upstate New York on NYISO the factor is likely 0.1–0.2 and varies by hour; an hourly marginal factor would change the sustainability numbers materially.
-- **A frozen model degrades within a year** (coverage 0.90 → 0.81). Retraining is part of the system, not an option — and the gate must be tuned so it can actually pass.
-- **Retraining is file-fed** in replay mode; a real deployment needs the trainer to read `readings`/`weather_obs` from the database (same frame shape; a small reader).
-- **Small offsets** below ~8 % are below the context model's sensitivity by design (k = 1.5). A second, lag-based model behind the same `Detector` interface would catch them at the cost of the "new normal" problem; it was left as an extension until evaluation shows the need.
-- **Synthetic evaluation** measures detectability of *assumed* anomaly shapes. The real building's anomalies may not look like any of the six; the 2020 replay is the only real-world check, and it is unlabelled.
-- **One meter.** Per-(hour, weekday) residual scales, holiday calendars (academic vs federal) and cold-start behaviour (4–6 weeks of readings across a temperature range before the band is trustworthy) would all need revisiting for a portfolio of buildings.
+The replay simulator publishes historical readings at a chosen speed factor: 1× is real time (one reading per 15 minutes), 96× plays a building day in fifteen real minutes for a demonstration, 30,000× backfills history. Timestamps are never re-stamped to the present — doing so would put January weather and a January day-of-year against a September clock and corrupt the expectations. The dashboard is simply pointed at the historical range.
 
-## 10. What I would tell someone starting the same project
+## 11. Monitoring, drift and retraining
 
-1. **Profile the gaps, the units, the time zone and the regimes before modelling.** Half the defects in the original notebook were data handling, not ML.
-2. **Split by time and evaluate on a whole year.** Anything else flatters you.
-3. **Build the evaluation harness before tuning anything.** Every design change above — level tracking, clipping, winsorising, calibration on the adjusted residual — was found by a number the harness produced, not by inspection.
-4. **Tune on the calibration year, look at the test year once.** Write down when you looked twice.
-5. **Score in production with the exact function you evaluated.** One path, one test that batch equals streaming.
-6. **Design the gate to say no**, then make sure it can also say yes.
+### 11.1 Health is SQL on the scores table
+
+The manager's dashboard carries a health row computed from `scores`: seconds since the last reading, scoring latency p95, 24-hour band coverage, 24-hour MAE, stale-weather share, and the active model version. Three provisioned Grafana alert rules: *an anomaly is open*; *no score for 30 minutes* (the pipeline is broken somewhere between meter and scorer); *coverage below 80 % for a day* (the model is stale or the building changed). For a single meter, realised band coverage *is* the drift statistic that matters, which is why no distribution-drift library was added.
+
+### 11.2 Retraining
+
+Nightly, on a trailing 24-month window split three ways: train on the oldest 18 months, calibrate on the next three, evaluate on the most recent three. Evaluation injects anomalies (two per type — a three-month window fits two fourteen-day drifts, not three) and scores the candidate, the seasonal-naive baseline **and the current production model** on the same window.
+
+### 11.3 The gate
+
+A candidate is promoted to `@production` only if, per anomaly type, recall ≥ 0.9 × the baseline's *or* ≥ 0.8 absolute (with ten injected events per type, recall is quantised to 0.1 and one missed event must not block a promotion); clean false alarms ≤ 3/week; coverage within 0.80–0.97; and no recall regression of more than 10 % against production, nor more than one extra false alarm per week. Otherwise the model is registered at `@staging` with its metrics and nothing changes.
+
+Every candidate so far has been refused, each time for a defensible reason: the first because its band covered 100 % (the §7.3 bug), the second — trained through February 2020 and calibrated on the lockdown — because it was quieter (0.38 FA/week, coverage 0.91) but caught only 70 % of injected offsets where production caught 100 %. A gate that has never said no is decoration; a gate that can never say yes is a bug. The current one has proven the first half; the second half is the next thing to verify (§13).
+
+### 11.4 Lineage
+
+Every score row and every alert carries `model_version`, so a change in behaviour on the dashboard can be attributed to a promotion, and rollback is one alias change plus `/reload-model`.
+
+## 12. What the code review found
+
+Before publication the repository was independently reviewed against the plan. The findings changed the system; they are recorded because a write-up that omits them would misrepresent how the system got here.
+
+**Fixed before publishing**
+
+- An 876 KB SQLite file (an empty MLflow store containing an absolute personal path) was tracked; removed from all history.
+- `make retrain` invoked the *training* script, not the retrain job — the flagship automation would have silently re-pointed `@staging` at a fresh 2016–17 model every night.
+- The model hot-swap level-bias carry-over (§10.3), reproduced by the reviewer with nine spurious alerts.
+- The calibration/scorer level-tracker mismatch (§7.3): reported coverage 0.900 vs realised 0.863 across a regime break.
+- No database reconnect in the scorer (§10.2).
+- Recall quantisation in the gate (§11.3).
+- Three inconsistent sources for the emission factor and tariff (a YAML section nobody read, `.env`, and the dashboard variables); reduced to two with the documentation pointing at both.
+- A real AWS IoT endpoint hostname in a legacy notebook, scrubbed.
+
+**Recorded rather than built**
+
+- Retraining is file-fed (the archived CSV plus the Open-Meteo parquet), not database-fed as first planned; a small reader over `readings ⋈ weather_obs` is needed once a real meter is connected.
+- The "scorer stale" Grafana rule uses wall-clock `now()` and fires during any historical replay.
+- The per-type precision/F1 in the evaluation table count alerts caused by *other* injected types as false positives and are structurally pessimistic; they are not used for decisions.
+
+**Called out as sound**: split hygiene, the single scoring path with the batch-equals-streaming test, the fairness of the baseline (last week's reading is past data, not future), thread safety and SQL parameterisation in the scorer, and the absence of any credential in the tree or its history.
+
+## 13. Limits, open questions, next steps
+
+- **Units and factors.** `Demand` is assumed to be kW. The CO₂e factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders. For upstate New York on NYISO the factor is likely 0.1–0.2 kg/kWh and varies by hour with the generation mix; an hourly marginal factor would change the sustainability figures materially and is a straightforward join.
+- **A frozen model degrades within a year** (coverage 0.90 → 0.81). Retraining is a component, not an option — and the gate must be shown to pass on a healthy candidate, which has not happened yet because the only windows tried straddle the lockdown.
+- **Small offsets.** Below roughly 8 % the context band cannot see them. The documented extension is a second, lag-based model behind the same `Detector` interface whose residual feeds only the spike rule (never CUSUM, to avoid the new-normal problem).
+- **Synthetic evaluation measures detectability of assumed shapes.** The building's real anomalies may look like none of the six. The 2020–21 replay is the only real-world check and it is unlabelled; a period of manager feedback ("this alert was real / was not") would turn the false-alarm rate into a measured precision.
+- **One meter, one weather station, one holiday calendar.** A portfolio would need per-building models or a global model with building identity, an academic calendar if the building is on a campus (the evening peak hints at residential use), and a cold-start policy (4–6 weeks of readings across a temperature range before the band is trustworthy).
+- **Within-hour shape anomalies** (short cycling) are invisible to a point model; the autoencoder is the right tool there and remains the candidate second signal.
+- **Live weather** needs the Open-Meteo current/forecast endpoint wired in; replay uses the archive.
+
+## 14. Lessons
+
+1. **Profile before modelling.** Gaps, units, time zone, regimes. Half of the inherited defects were data handling.
+2. **Split by time, test on a whole year, look at the test year once — and write down when you looked twice.**
+3. **Build the evaluation harness before tuning anything.** Every design change in §7 was found by a number the harness produced: 12 false alarms a week, a CUSUM that trips on white noise, a rebound alert, a band covering 100 %. None was found by inspecting code.
+4. **Decide what the model must *not* know.** Excluding demand lags was the most consequential feature decision, and it was made for the operational reason, not a statistical one.
+5. **Make the deployed score the evaluated score.** One function; a test that batch equals streaming; calibrate on the exact quantity you will threshold.
+6. **Design the gate to say no, then prove it can say yes.**
+7. **Simplicity is a budget you spend deliberately.** The level tracker, the winsorised CUSUM and the supersede rule were each a few lines that replaced a second model, a second metrics stack or a second alert type.
 
 ---
 
-## Appendix — reproducing the numbers
+## Appendix A — reproducing the numbers
 
 ```
-make setup && make weather          # environment; Open-Meteo archive → data/processed/
-MLFLOW_TRACKING_URI=sqlite:///mlruns.db uv run python scripts/train.py
-uv run python scripts/evaluate.py --baseline --split calibrate      # §5.4 tuning data (2018)
-uv run python scripts/evaluate.py --baseline                        # §6.4 held-out result (2019)
-uv run python scripts/evaluate.py --full-series                     # §6.4 sanity check (2016–2021)
-make up && make train && make eval && make backfill                 # §7 live stack + full replay
-make retrain AS_OF=2020-09-01                                       # §8 gate behaviour
-uv run pytest -q                                                    # 102 unit tests + 1 integration
+make setup && make weather                                  # environment; Open-Meteo archive → data/processed/
+uv run python scripts/train.py                              # §5–6: fit, calibrate (2016–17 / 2018), register @staging
+uv run python scripts/evaluate.py --baseline --split calibrate   # §7.4 tuning table (2018)
+uv run python scripts/evaluate.py --baseline                     # §9.1 held-out result (2019)
+uv run python scripts/evaluate.py --full-series                  # §9.3 regime-change check
+make up && make train && make eval && make backfill              # §9.4, §10: stack + full replay
+make retrain AS_OF=2020-09-01                                    # §11.3 gate behaviour
+uv run pytest -q                                                 # 102 unit tests + 1 integration test
 ```
 
-Design record and decision log: `docs/PLAN.md`. Operations: `docs/runbook.md`.
+Data-quality figures in §3: `gap_report()` in `src/smartbuilding/data/demand.py`; the Open-Meteo comparison is the Phase 1 verification in `docs/PLAN.md`. Feature importances and correlations in §4.5 come from the median booster of the production model over the training frame.
+
+## Appendix B — the scoring quantities
+
+| Symbol | Meaning |
+|---|---|
+| `q05, q50, q95` | conditional quantiles of demand for the context, from the three boosters |
+| `c` | calibration factor; scales the raw half-band so the band covers 90 % on the calibration year |
+| `half` | `c · (q95 − q05) / 2` — calibrated half-width, kW |
+| `σ` | `half / 1.645` — standard-normal-equivalent residual scale, kW |
+| `level_kw` | robust EWMA of `y − expected`, half-life 3 days, updates clipped at ±2σ |
+| `expected` | `q50 + level_kw` — what the building should be drawing now, given context and recent level |
+| `z` | `(y − expected) / σ` — signed, standardised residual |
+| `s_pos, s_neg` | two-sided CUSUM sums on `clip(z, ±5)` with allowance k = 1.5; trip at h = 12 |
+| `excess_kwh` | `max(y − upper, 0) × 0.25 h` — energy above the normal range in the slot |
