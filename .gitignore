@@ -1,0 +1,30 @@
+# secrets — never commit
+secrets/
+.env
+*.pem
+*.pem.*
+*credentials*.csv
+*accessKeys*.csv
+legacy/course_project/Certificates_screenshot.png
+
+# data & artifacts
+data/raw/
+data/processed/
+mlruns/
+mlruns.db
+reports/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+
+# os / editor
+.DS_Store
+.ipynb_checkpoints/
+.claude/settings.local.json
+legacy/chromedriver

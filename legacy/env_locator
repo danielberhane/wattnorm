@@ -1,0 +1,6 @@
+import sys
+import os
+
+print(f"Current Python Environment: {sys.prefix}")
+print("All Python Executables Found:")
+os.system("which -a python python3" if os.name != "nt" else "where python")

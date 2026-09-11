@@ -1,0 +1,38 @@
+import pandas as pd
+from pymongo import MongoClient
+from datetime import datetime
+
+# Connect to MongoDB
+client = MongoClient('mongodb://admin:password123@localhost:27017/')
+db = client['smart-building']
+
+# Select one collection (you had two collection assignments)
+collection = db['demand']  # Remove or comment out the weather_data line
+
+# Read CSV file
+df_demand = pd.read_csv('data/demand.csv')
+
+# Convert timestamp strings to datetime objects - note the capital 'T' in Timestamp
+df_demand['Timestamp'] = pd.to_datetime(df_demand['Timestamp'])
+
+# Convert DataFrame to list of dictionaries
+records = df_demand.to_dict('records')
+
+# Insert into MongoDB
+try:
+    collection.insert_many(records)
+    print(f"Successfully inserted {len(records)} records")
+except Exception as e:
+    print(f"An error occurred: {e}")
+
+# Verify the data
+print("\nVerifying data:")
+print(f"Total documents in collection: {collection.count_documents({})}")
+
+# Show first few records
+print("\nFirst few records:")
+for doc in collection.find().limit(3):
+    print(doc)
+
+# Close the connection
+client.close()
