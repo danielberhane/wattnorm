@@ -77,7 +77,15 @@ def main() -> None:
     windows = retrain_windows(args.as_of, args.window_months)
     log.info("windows: %s", windows)
 
+    # Retraining is file-fed (data/raw + Open-Meteo parquet). For a live meter, point
+    # load_dataset at the readings/weather_obs tables — the frame shape is identical.
     data = load_dataset(cfg, windows["train"][0], windows["evaluate"][1])
+    last_reading = data.loc[data["kw"].notna(), "ts"].max()
+    if pd.Timestamp(windows["evaluate"][1], tz="UTC") > last_reading:
+        raise SystemExit(
+            f"--as-of {args.as_of} needs data through {windows['evaluate'][1]} but readings end "
+            f"{last_reading:%Y-%m-%d}; pass an earlier --as-of"
+        )
     parts = temporal_split(data, windows)
     version = f"retrain-{args.as_of.isoformat()}"
     candidate, metrics = train_detector(

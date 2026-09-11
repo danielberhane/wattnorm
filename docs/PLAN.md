@@ -215,6 +215,14 @@ uv run pytest -q
   replays never drop messages. SUSTAINED supersedes SPIKE; CUSUM input winsorised at spike_z.
 - Host ports: TimescaleDB 5433, MLflow 5001, scorer 8001 (5432/5000/8000 were taken on this machine).
 - Runbook: `docs/runbook.md`.
+- **Retraining is file-fed** (`data/raw` + Open-Meteo parquet), not DB-fed as first planned: a DB reader is a
+  later swap once a real meter feeds `readings`/`weather_obs`. `--as-of` is guarded against the data end.
+- Gate uses a recall floor (0.8) or 0.9× baseline, whichever is lower, because ~10 injected events per type
+  quantise recall to 0.1 and one miss must not block promotion. Coverage bounds 0.80–0.97.
+- Post-review fixes (2026-09-11): shared `track_level` for calibration and scoring; model hot-swap resets the
+  level bias and rebuilds CUSUM with the new rules; DB sink reconnects once; `make retrain` fixed;
+  `mlflow.db` purged from history; IoT endpoint scrubbed from `legacy/`. The 2019 evaluation was run twice
+  (before and after the calibration change) — read its numbers as post-one-revision.
 
 ## Makefile
 `make setup lint test train eval up down replay [START= INJECT=] retrain [AS_OF=]`

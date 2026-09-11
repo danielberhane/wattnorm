@@ -10,7 +10,9 @@ make test       # unit tests
 make up         # mosquitto + timescaledb + mlflow + grafana + scorer
 make train      # train + calibrate in the stack → MLflow @staging
 make eval       # evaluate vs baseline on the held-out year; promotes @production on PASS
-make replay     # replay 2020-01 → over MQTT at 60×   (START=… INJECT=sustained_offset)
+make backfill   # load the whole 2020-01 → 2021-05 history fast (background)
+make live       # human-paced demo: one building day per ~15 min   (START=… INJECT=sustained_offset)
+make retrain    # trailing-window retrain with promotion gate  (AS_OF=YYYY-MM-DD)
 ```
 
 Grafana: http://localhost:3000 (admin/admin) · MLflow: http://localhost:5001 · scorer: http://localhost:8001/health

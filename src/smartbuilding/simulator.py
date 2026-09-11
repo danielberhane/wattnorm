@@ -21,6 +21,8 @@ from smartbuilding.pipeline import load_dataset
 
 log = logging.getLogger("simulator")
 
+DEMO_INJECTABLE = ["spike", "sustained_offset", "dropout", "schedule_shift", "stuck_meter"]
+
 
 def replay_plan(
     data: pd.DataFrame, meter_id: str, station_id: str, inject_kind: str | None, seed: int = 0
@@ -31,6 +33,8 @@ def replay_plan(
     """
     df = data.reset_index(drop=True)
     if inject_kind:
+        if inject_kind not in DEMO_INJECTABLE:
+            raise ValueError(f"--inject must be one of {DEMO_INJECTABLE} (fits a 3-day head)")
         # place the anomaly a day into the replay so a demo shows it quickly
         rng = np.random.default_rng(seed)
         head = df.iloc[: 3 * 96].copy()

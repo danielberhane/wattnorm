@@ -18,22 +18,34 @@ ALERT_COLS = [
 
 
 class PostgresSink:
+    """One autocommit connection; a dropped connection is re-opened once and the statement retried,
+    so a database restart costs one failed reading, not every reading until the scorer restarts."""
+
     def __init__(self, url: str):
+        self.url = url
         self.conn = psycopg.connect(url, autocommit=True)
 
     def close(self) -> None:
         self.conn.close()
 
+    def _run(self, sql: str, params) -> psycopg.Cursor:
+        try:
+            return self.conn.execute(sql, params)
+        except psycopg.OperationalError:
+            self.conn.close()
+            self.conn = psycopg.connect(self.url, autocommit=True)
+            return self.conn.execute(sql, params)
+
     def execute(self, sql: str, params: tuple = ()) -> None:
-        self.conn.execute(sql, params)
+        self._run(sql, params)
 
     def fetchone(self, sql: str, params: tuple = ()):
-        return self.conn.execute(sql, params).fetchone()
+        return self._run(sql, params).fetchone()
 
     # -- Sink --------------------------------------------------------------
 
     def insert_reading(self, meter_id: str, ts: datetime, kw: float) -> None:
-        self.conn.execute(
+        self._run(
             "INSERT INTO readings (ts, meter_id, kw) VALUES (%s, %s, %s) "
             "ON CONFLICT (ts, meter_id) DO UPDATE SET kw = EXCLUDED.kw",
             (ts, meter_id, kw),
@@ -41,14 +53,14 @@ class PostgresSink:
 
     def insert_weather(self, station_id: str, row: dict) -> None:
         cols = ["ts", *[c for c in row if c != "ts"]]
-        self.conn.execute(
+        self._run(
             f"INSERT INTO weather_obs (station_id, {', '.join(cols)}) "
             f"VALUES (%s, {', '.join(['%s'] * len(cols))}) ON CONFLICT DO NOTHING",
             (station_id, *[row[c] for c in cols]),
         )
 
     def insert_score(self, row: dict) -> None:
-        self.conn.execute(
+        self._run(
             f"INSERT INTO scores ({', '.join(SCORE_COLS)}) "
             f"VALUES ({', '.join(['%s'] * len(SCORE_COLS))}) ON CONFLICT DO NOTHING",
             tuple(row[c] for c in SCORE_COLS),
@@ -56,7 +68,7 @@ class PostgresSink:
 
     def open_alert(self, alert: dict) -> int:
         values = [Jsonb(alert[c]) if c == "drivers" else alert[c] for c in ALERT_COLS]
-        row = self.conn.execute(
+        row = self._run(
             f"INSERT INTO alerts ({', '.join(ALERT_COLS)}) "
             f"VALUES ({', '.join(['%s'] * len(ALERT_COLS))}) RETURNING id",
             values,
@@ -73,7 +85,7 @@ class PostgresSink:
     # -- ops ---------------------------------------------------------------
 
     def record_model_version(self, version: str, run_id: str | None, metrics: dict, promoted: bool):
-        self.conn.execute(
+        self._run(
             "INSERT INTO model_versions (version, run_id, f1, fa_per_week, coverage, promoted) "
             "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (version) DO UPDATE SET "
             "promoted = EXCLUDED.promoted, f1 = EXCLUDED.f1, fa_per_week = EXCLUDED.fa_per_week, "

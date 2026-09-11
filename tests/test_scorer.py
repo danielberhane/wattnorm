@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
+import pandas as pd
 import pytest
 
 from smartbuilding.mqtt import DemandMsg, WeatherMsg
@@ -120,3 +121,32 @@ def test_jump_far_into_the_past_resets_meter_state_instead_of_ignoring(core):
     core.handle_demand(DemandMsg(meter_id="bldg-a", ts=ts - timedelta(days=30), kw=200.0))
     assert len(core.sink.scores) == 2
     assert core.health()["meters"]["bldg-a"]["n_scored"] == 1  # state was reset
+
+
+def test_swapping_models_does_not_carry_the_old_level_bias_into_alerts(core, fitted):
+    """Reviewer finding: after a promotion the old q50-relative bias made quiet days alert."""
+
+    from smartbuilding.features import SeasonalMeanImputer, build_features
+    from smartbuilding.model import Calibrator, Detector, QuantileLGBM
+    from tests.conftest import PARAMS, RULES, TZ
+
+    # old model adapts to a building that dropped 20 kW
+    low = synthetic("2018-07-01", 20, seed=70)
+    low["kw"] -= 20.0
+    _feed(core, low)
+    # a new model trained on the shifted building takes over
+    train = synthetic("2017-01-01", 365, seed=71)
+    train["kw"] -= 20.0
+    imp = SeasonalMeanImputer(TZ).fit(train)
+    model = QuantileLGBM(PARAMS).fit(build_features(train, imp, TZ), train["kw"])
+    cal = synthetic("2018-05-01", 30, seed=72)
+    cal["kw"] -= 20.0
+    calib = Calibrator(0.9).fit(cal["kw"], model.predict(build_features(cal, imp, TZ)))
+    core.swap_detector(Detector(model, imp, calib, RULES, TZ, model_version="new"))
+    before = len(core.sink.alerts)
+    quiet = synthetic("2018-07-21", 5, seed=73)
+    quiet["kw"] -= 20.0
+    _feed(core, quiet)
+    new_alerts = [a for a in core.sink.alerts[before:] if "SUSTAINED" in a["alert_type"]]
+    assert new_alerts == []
+    assert abs(pd.Series([s["z"] for s in core.sink.scores[-96:]]).mean()) < 1.0

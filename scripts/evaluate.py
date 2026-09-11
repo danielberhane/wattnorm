@@ -5,13 +5,12 @@ uv run python scripts/evaluate.py --model models:/smartbuilding-detector@staging
 """
 
 import argparse
-import os
 import sys
 
 import mlflow
 import pandas as pd
 
-from smartbuilding.config import load_config
+from smartbuilding.config import Env, load_config
 from smartbuilding.data.splits import temporal_split
 from smartbuilding.eval import BaselineDetector, run_eval
 from smartbuilding.pipeline import gate, load_dataset
@@ -55,7 +54,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns.db"))
+    mlflow.set_tracking_uri(Env().mlflow_tracking_uri)
     detector = load_detector(args.model)
     print(f"model: {detector.model_version}")
 

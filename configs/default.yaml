@@ -36,6 +36,4 @@ rules:
   weather_stale_hours: 3
   level_halflife_days: 3  # EWMA of z tracks the building's recent level; deviations are judged against it
 
-sustainability:
-  emission_factor_kg_per_kwh: 0.25
-  tariff_usd_per_kwh: 0.14
+# emission factor / tariff live in .env (alerts table) and the dashboard text boxes (tiles)

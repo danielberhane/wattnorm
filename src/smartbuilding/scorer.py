@@ -219,9 +219,26 @@ class ScorerCore:
     # -- operations --------------------------------------------------------
 
     def swap_detector(self, detector: Detector) -> None:
-        """Hot-swap the model; per-meter CUSUM/level state is kept."""
+        """Hot-swap the model.
+
+        The level bias is relative to the *old* model's expectation, so it is reset (the new
+        model re-learns the level within its half-life). CUSUM sums are carried over but rebuilt
+        with the new rules; open alerts and last_ts are kept.
+        """
         with self._lock:
             self.detector = detector
+            for st in self.meters.values():
+                fresh = detector.new_state()
+                fresh.cusum.s_pos, fresh.cusum.s_neg = (
+                    st.detector_state.cusum.s_pos,
+                    st.detector_state.cusum.s_neg,
+                )
+                fresh.open_alerts = st.detector_state.open_alerts
+                fresh.last_kw, fresh.stuck_run = (
+                    st.detector_state.last_kw,
+                    st.detector_state.stuck_run,
+                )
+                st.detector_state = fresh
 
     def health(self) -> dict:
         with self._lock:

@@ -4,12 +4,11 @@ uv run python scripts/train.py --config configs/default.yaml
 """
 
 import argparse
-import os
 from datetime import UTC, datetime
 
 import mlflow
 
-from smartbuilding.config import load_config
+from smartbuilding.config import Env, load_config
 from smartbuilding.data.splits import temporal_split
 from smartbuilding.pipeline import load_dataset, train_detector
 from smartbuilding.registry import log_and_register
@@ -23,7 +22,7 @@ def main() -> None:
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "sqlite:///mlruns.db"))
+    mlflow.set_tracking_uri(Env().mlflow_tracking_uri)
     mlflow.set_experiment("smartbuilding")
 
     data = load_dataset(cfg, cfg.splits.train[0], cfg.splits.calibrate[1])

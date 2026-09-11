@@ -57,4 +57,18 @@ def test_calibration_is_immune_to_a_level_shift_in_the_calibration_period():
     shifted.loc[45 * 96 :, "kw"] -= 30.0  # the building changes regime half-way through
     _, m_clean = train_detector(train, cal, PARAMS, RULES, TZ, "a")
     _, m_shift = train_detector(train, shifted, PARAMS, RULES, TZ, "b")
-    assert m_shift["calibration_factor"] < 1.5 * m_clean["calibration_factor"]
+    # the clipped tracker absorbs a break over ~a week, so some widening is expected — not 8×
+    assert m_shift["calibration_factor"] < 2.0 * m_clean["calibration_factor"]
+
+
+def test_reported_calibration_coverage_matches_what_the_scorer_realises():
+    """Calibration and scoring must use the same level tracker, even across a regime break."""
+    train = synthetic("2017-01-01", 365, seed=1)
+    cal = synthetic("2018-01-01", 90, seed=2)
+    cal.loc[45 * 96 :, "kw"] -= 30.0
+    det, metrics = train_detector(train, cal, PARAMS, RULES, TZ, "a")
+    scores, _ = det.score(cal)
+    realised = (
+        (scores["actual_kw"] >= scores["lower_kw"]) & (scores["actual_kw"] <= scores["upper_kw"])
+    ).mean()
+    assert abs(realised - metrics["cal_coverage"]) < 0.015

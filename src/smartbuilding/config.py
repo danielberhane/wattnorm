@@ -49,12 +49,7 @@ class Rules(BaseModel):
     stuck_slots: int
     close_after_in_band_slots: int
     weather_stale_hours: int
-    level_halflife_days: float = 7.0
-
-
-class Sustainability(BaseModel):
-    emission_factor_kg_per_kwh: float
-    tariff_usd_per_kwh: float
+    level_halflife_days: float
 
 
 class Config(BaseModel):
@@ -63,7 +58,6 @@ class Config(BaseModel):
     splits: Splits
     model: ModelParams
     rules: Rules
-    sustainability: Sustainability
 
 
 def load_config(path: Path | str = "configs/default.yaml") -> Config:
@@ -80,7 +74,9 @@ class Env(BaseSettings):
     mqtt_port: int = 1883
     mqtt_tls: bool = False
     db_url: str = "postgresql://postgres:postgres@localhost:5433/smartbuilding"
-    mlflow_tracking_uri: str = "http://localhost:5001"
+    mlflow_tracking_uri: str = (
+        "sqlite:///mlruns.db"  # local experiments; the stack sets http://mlflow:5000
+    )
     model_uri: str = "models:/smartbuilding-detector@production"
     emission_factor_kg_per_kwh: float = 0.25
     tariff_usd_per_kwh: float = 0.14

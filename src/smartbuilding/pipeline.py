@@ -10,7 +10,7 @@ from smartbuilding.data.dataset import build_dataset
 from smartbuilding.data.demand import load_demand, localize
 from smartbuilding.data.weather import load_weather
 from smartbuilding.features import SeasonalMeanImputer, build_features
-from smartbuilding.model import SLOTS_PER_DAY, Calibrator, Detector, QuantileLGBM
+from smartbuilding.model import Calibrator, Detector, QuantileLGBM, level_alpha, track_level
 
 
 def load_dataset(cfg: Config, start: str, end: str) -> pd.DataFrame:
@@ -45,20 +45,18 @@ def train_detector(
     imputer = SeasonalMeanImputer(tz).fit(train)
     model = QuantileLGBM(params).fit(build_features(train, imputer, tz), train["kw"])
     pred_cal = model.predict(build_features(calibrate, imputer, tz))
-    # Calibrate on the same level-adjusted residual the scorer uses: the slow EWMA of the kW
-    # residual (the building's recent level) is removed before measuring the band width, so a
-    # regime change inside the calibration window does not blow the band open.
+    # Calibrate on the same level-adjusted residual the scorer uses (model.track_level): the
+    # building's recent level is removed before measuring the band width, so a regime change
+    # inside the calibration window does not blow the band open. The tracker's clipping depends
+    # on σ, which depends on the factor, so iterate once: unclipped-ish first pass, then refit.
     resid = calibrate["kw"].to_numpy() - pred_cal["q50"].to_numpy()
-    level = (
-        pd.Series(resid)
-        .ewm(halflife=rules.level_halflife_days * SLOTS_PER_DAY, adjust=False)
-        .mean()
-        .shift(1)
-        .fillna(0.0)
-        .to_numpy()
-    )
-    y_adj = pd.Series(calibrate["kw"].to_numpy() - level, index=pred_cal.index)
-    calibrator = Calibrator(params.target_coverage).fit(y_adj, pred_cal)
+    alpha = level_alpha(rules.level_halflife_days)
+    calibrator = Calibrator(params.target_coverage)
+    for _ in range(3):
+        sigma = calibrator.sigma(pred_cal).to_numpy()
+        level = track_level(resid, sigma, alpha)
+        y_adj = pd.Series(calibrate["kw"].to_numpy() - level, index=pred_cal.index)
+        calibrator.fit(y_adj, pred_cal)
     lower, upper = calibrator.bands(pred_cal)
     lower, upper = lower + level, upper + level
 
@@ -82,20 +80,24 @@ def gate(
     baseline: pd.DataFrame,
     max_fa_per_week: float = 3.0,
     coverage: tuple[float, float] = (0.80, 0.97),
-    recall_ratio: float = 1.0,
+    recall_ratio: float = 0.9,
+    recall_floor: float = 0.8,
 ) -> tuple[bool, list[str]]:
     """Promotion gate on the operational metrics.
 
-    Recall per anomaly type must be at least `recall_ratio` × the baseline's, false alarms on
-    clean data must stay under budget, and the band must be roughly calibrated. F1/precision are
+    Recall per anomaly type must be at least `recall_ratio` × the baseline's — or at least
+    `recall_floor` in absolute terms, since with ~10 injected events per type recall is quantised
+    and one missed event must not block a promotion — false alarms on clean data must stay under
+    budget, and the band must be roughly calibrated. F1/precision are
     deliberately not used: with a handful of injected events per year they only proxy FA count.
     """
     reasons: list[str] = []
     for kind in ours.index.drop("clean", errors="ignore"):
-        if ours.loc[kind, "recall"] < recall_ratio * baseline.loc[kind, "recall"]:
+        need = min(recall_ratio * baseline.loc[kind, "recall"], recall_floor)
+        if ours.loc[kind, "recall"] < need:
             reasons.append(
-                f"{kind}: recall {ours.loc[kind, 'recall']:.2f} < "
-                f"{recall_ratio:.2f} × baseline {baseline.loc[kind, 'recall']:.2f}"
+                f"{kind}: recall {ours.loc[kind, 'recall']:.2f} < {need:.2f} "
+                f"(baseline {baseline.loc[kind, 'recall']:.2f})"
             )
     fa = ours.loc["clean", "fa_per_week"]
     if fa > max_fa_per_week:

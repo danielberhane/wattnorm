@@ -46,7 +46,7 @@ live:  ## human-paced demo: one building day per ~15 real minutes, from START
 	docker compose --profile replay run --rm simulator --start $(START) --speed 96 $(if $(INJECT),--inject $(INJECT),)
 
 retrain:
-	docker compose --profile train run --rm trainer $(if $(AS_OF),--as-of $(AS_OF),)
+	docker compose --profile train run --rm trainer retrain $(if $(AS_OF),--as-of $(AS_OF),)
 
 logs:
 	docker compose logs -f --tail=50 scorer

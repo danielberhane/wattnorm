@@ -108,6 +108,40 @@ class Calibrator:
         return cls(**d)
 
 
+# ---------------------------------------------------------------- level tracker
+
+
+def level_alpha(halflife_days: float) -> float:
+    return 1 - 0.5 ** (1 / (halflife_days * SLOTS_PER_DAY))
+
+
+def _final_level(resid: np.ndarray, sigma: np.ndarray, alpha: float, start: float) -> float:
+    """Level after consuming every observation (the state to carry to the next call)."""
+    bias = start
+    for r, sg in zip(resid, sigma, strict=True):
+        if np.isfinite(r):
+            bias += alpha * np.clip(r - bias, -LEVEL_CLIP_SIGMA * sg, LEVEL_CLIP_SIGMA * sg)
+    return float(bias)
+
+
+def track_level(
+    resid: np.ndarray, sigma: np.ndarray, alpha: float, start: float = 0.0
+) -> np.ndarray:
+    """Robust EWMA of the kW residual, exactly as Detector.score runs it.
+
+    Returns the level *before* each observation (what the scorer subtracts at that slot).
+    Each update is clipped to ±LEVEL_CLIP_SIGMA·σ so an anomaly cannot become "normal".
+    """
+    level = np.empty(len(resid))
+    bias = start
+    for i, (r, sg) in enumerate(zip(resid, sigma, strict=True)):
+        level[i] = bias
+        if np.isfinite(r):
+            step = np.clip(r - bias, -LEVEL_CLIP_SIGMA * sg, LEVEL_CLIP_SIGMA * sg)
+            bias += alpha * step
+    return level
+
+
 # ---------------------------------------------------------------- CUSUM
 
 
@@ -194,26 +228,19 @@ class Detector:
         half = self.calibrator._half_width(pred).to_numpy() * self.calibrator.factor
         q50 = pred["q50"].to_numpy()
         kw = df["kw"].to_numpy(dtype=float)
-        alpha = 1 - 0.5 ** (1 / (self.rules.level_halflife_days * SLOTS_PER_DAY))
+        alpha = level_alpha(self.rules.level_halflife_days)
+        level = track_level(kw - q50, sigma, alpha, start=state.level_bias_kw)
+        state.level_bias_kw = _final_level(kw - q50, sigma, alpha, state.level_bias_kw)
+        expected = q50 + level
+        z_adj = (kw - expected) / sigma
 
         alerts, cpos, cneg = [], [], []
-        expected = np.empty(len(df))
-        z_adj = np.empty(len(df))
-        for i, kw_i in enumerate(kw):
-            expected[i] = q50[i] + state.level_bias_kw
-            z_adj[i] = (kw_i - expected[i]) / sigma[i]
-            fired = self._apply_rules(state, kw_i, z_adj[i])
-            in_band = bool(np.isfinite(kw_i) and abs(kw_i - expected[i]) <= half[i])
+        for kw_i, z_i, exp_i, half_i in zip(kw, z_adj, expected, half, strict=True):
+            fired = self._apply_rules(state, kw_i, z_i)
+            in_band = bool(np.isfinite(kw_i) and abs(kw_i - exp_i) <= half_i)
             alerts.append(self._update_open_alerts(state, fired, in_band))
             cpos.append(state.cusum.s_pos)
             cneg.append(state.cusum.s_neg)
-            if np.isfinite(kw_i):
-                # robust update: an anomaly may nudge the level by at most 2σ per slot,
-                # so it does not become "normal" and cause a rebound alert when it ends
-                resid = np.clip(
-                    kw_i - expected[i], -LEVEL_CLIP_SIGMA * sigma[i], LEVEL_CLIP_SIGMA * sigma[i]
-                )
-                state.level_bias_kw += alpha * resid
 
         lower, upper = expected - half, expected + half
         excess = np.nan_to_num(np.clip(df["kw"].to_numpy() - upper, 0.0, None) * SLOT_HOURS)
