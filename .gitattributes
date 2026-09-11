@@ -1,0 +1,5 @@
+# legacy/ is the archived notebook prototype; exclude it from GitHub's language stats
+legacy/** linguist-vendored
+*.ipynb linguist-vendored
+# treat the dashboard JSON as generated so it does not count as hand-written code
+deploy/grafana/dashboards/*.json linguist-generated
