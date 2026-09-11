@@ -18,16 +18,7 @@ and tariff (both editable on the dashboard — the defaults are placeholders).*
 
 ## How it works
 
-```mermaid
-flowchart LR
-    M[Meter or replay<br/>simulator] -->|MQTT<br/>building/&lt;id&gt;/demand| B[(mosquitto)]
-    W[Weather<br/>Open-Meteo] -->|MQTT<br/>weather/&lt;station&gt;/obs| B
-    B --> S[scorer<br/>expected · band · z · CUSUM · rules]
-    R[(MLflow registry<br/>@production)] -.model.-> S
-    S --> D[(TimescaleDB<br/>readings · scores · alerts)]
-    D --> G[Grafana<br/>dashboard + alert rules]
-    T[trainer / nightly retrain<br/>gate vs baseline & production] -->|register + promote| R
-```
+![Architecture — meter and weather over MQTT into the scorer, TimescaleDB and Grafana; trainer and MLflow registry feed the model](docs/img/architecture.svg)
 
 - **Model** — LightGBM quantile regression (q05/q50/q95) on calendar (cyclic time-of-day, weekday,
   day-of-year, holidays) and weather (temperature, humidity, wind, pressure, heating/cooling degrees).

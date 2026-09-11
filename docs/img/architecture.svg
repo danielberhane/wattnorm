@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="760" viewBox="0 0 1800 760" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <rect width="1800" height="760" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="900" y="78" text-anchor="middle" font-size="56" fill="#111827">Smartbuildings — Real-time pipeline</text>
+  <text x="900" y="118" text-anchor="middle" font-size="27" fill="#6B7280">meter readings scored against what the building should draw  ·  one model, one database, one dashboard</text>
+  <line x1="430" y1="150" x2="1370" y2="150" stroke="#E5E7EB" stroke-width="2"/>
+
+  <!-- connectors (drawn first so boxes sit on top) -->
+  <g stroke="#111827" stroke-width="2.5" fill="none">
+    <!-- sources → bus → broker -->
+    <path d="M 360 290 H 400 V 390 H 360"/>
+    <path d="M 400 340 H 450"/>
+    <!-- broker → scorer → timescale → grafana -->
+    <path d="M 690 340 H 760"/>
+    <path d="M 1060 340 H 1130"/>
+    <path d="M 1380 340 H 1450"/>
+    <!-- trainer → registry -->
+    <path d="M 700 570 H 910"/>
+  </g>
+  <!-- model feed: registry → scorer -->
+  <path d="M 1030 520 V 385" stroke="#2F7BE8" stroke-width="2.5" stroke-dasharray="9 7" fill="none"/>
+  <text x="1048" y="462" font-size="20" fill="#2F7BE8">model  @production</text>
+
+  <!-- junction dot -->
+  <circle cx="400" cy="340" r="7" fill="#111827"/>
+
+  <!-- sources -->
+  <rect x="60" y="250" width="300" height="80" rx="40" fill="#EEF2F7" stroke="#111827" stroke-width="2.5"/>
+  <text x="210" y="300" text-anchor="middle" font-size="30" fill="#111827">Meter · replay</text>
+  <rect x="60" y="350" width="300" height="80" rx="40" fill="#EEF2F7" stroke="#111827" stroke-width="2.5"/>
+  <text x="210" y="400" text-anchor="middle" font-size="30" fill="#111827">Weather</text>
+  <text x="210" y="465" text-anchor="middle" font-size="19" fill="#6B7280">MQTT · same schema for a real meter</text>
+
+  <!-- broker -->
+  <rect x="450" y="295" width="240" height="90" rx="10" fill="#ffffff" stroke="#111827" stroke-width="2.5"/>
+  <text x="570" y="351" text-anchor="middle" font-size="30" fill="#111827">mosquitto</text>
+
+  <!-- scorer (ours) -->
+  <rect x="760" y="295" width="300" height="90" rx="10" fill="#EAF2FF" stroke="#2F7BE8" stroke-width="2.5"/>
+  <circle cx="785" cy="319" r="7" fill="none" stroke="#2F7BE8" stroke-width="2.5"/>
+  <text x="915" y="351" text-anchor="middle" font-size="30" fill="#1D5FCC">Scorer</text>
+  <text x="855" y="418" text-anchor="middle" font-size="19" fill="#6B7280">expected · band · z · CUSUM · alerts</text>
+
+  <!-- TimescaleDB cylinder -->
+  <g>
+    <path d="M 1130 304 a 125 14 0 0 0 250 0 v 72 a 125 14 0 0 1 -250 0 z" fill="#E6F7F0" stroke="#1E8E5A" stroke-width="2.5"/>
+    <ellipse cx="1255" cy="304" rx="125" ry="14" fill="#E6F7F0" stroke="#1E8E5A" stroke-width="2.5"/>
+    <text x="1255" y="358" text-anchor="middle" font-size="30" fill="#1E7A4D">TimescaleDB</text>
+    <text x="1255" y="418" text-anchor="middle" font-size="19" fill="#6B7280">readings · scores · alerts</text>
+  </g>
+
+  <!-- Grafana -->
+  <rect x="1450" y="295" width="290" height="90" rx="10" fill="#FFF4DA" stroke="#D9770A" stroke-width="2.5"/>
+  <text x="1595" y="351" text-anchor="middle" font-size="30" fill="#B8620A">Grafana</text>
+  <text x="1595" y="418" text-anchor="middle" font-size="19" fill="#6B7280">dashboard · alert rules</text>
+
+  <!-- trainer (ours) -->
+  <rect x="450" y="525" width="250" height="90" rx="10" fill="#ffffff" stroke="#111827" stroke-width="2.5"/>
+  <circle cx="475" cy="549" r="7" fill="none" stroke="#2F7BE8" stroke-width="2.5"/>
+  <text x="585" y="581" text-anchor="middle" font-size="30" fill="#111827">Trainer</text>
+  <text x="575" y="648" text-anchor="middle" font-size="19" fill="#6B7280">nightly retrain · promotion gate</text>
+
+  <!-- MLflow cylinder -->
+  <g>
+    <path d="M 910 534 a 120 14 0 0 0 240 0 v 72 a 120 14 0 0 1 -240 0 z" fill="#EFEAFF" stroke="#7A4FD8" stroke-width="2.5"/>
+    <ellipse cx="1030" cy="534" rx="120" ry="14" fill="#EFEAFF" stroke="#7A4FD8" stroke-width="2.5"/>
+    <text x="1030" y="588" text-anchor="middle" font-size="30" fill="#6B3FCB">MLflow</text>
+    <text x="1030" y="648" text-anchor="middle" font-size="19" fill="#6B7280">experiments · model registry</text>
+  </g>
+
+  <!-- legend -->
+  <circle cx="1260" cy="581" r="7" fill="none" stroke="#2F7BE8" stroke-width="2.5"/>
+  <text x="1278" y="588" font-size="19" fill="#6B7280">code in this repository</text>
+  <line x1="1510" y1="581" x2="1560" y2="581" stroke="#2F7BE8" stroke-width="2.5" stroke-dasharray="9 7"/>
+  <text x="1572" y="588" font-size="19" fill="#6B7280">model hot-swap</text>
+</svg>
