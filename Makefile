@@ -19,7 +19,7 @@ train:
 	uv run python scripts/train.py --config configs/default.yaml
 
 eval:
-	uv run python scripts/evaluate.py --config configs/default.yaml --baseline
+	uv run python scripts/evaluate.py --config configs/default.yaml --baseline --promote
 
 up:
 	docker compose up -d --build

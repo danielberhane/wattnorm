@@ -29,11 +29,12 @@ model:
 
 rules:
   spike_z: 4.0
-  cusum_k: 0.5
-  cusum_h: 5.0
+  cusum_k: 1.0  # allowance: residual wander below ~1σ is not an anomaly (tuned on 2018)
+  cusum_h: 12.0  # with k=1: +2σ shift trips in 12 slots (3 h); +3σ in 6 slots (tuned on 2018)
   stuck_slots: 8
   close_after_in_band_slots: 8
   weather_stale_hours: 3
+  level_halflife_days: 3  # EWMA of z tracks the building's recent level; deviations are judged against it
 
 sustainability:
   emission_factor_kg_per_kwh: 0.25

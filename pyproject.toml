@@ -34,12 +34,13 @@ extend-exclude = ["legacy"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "W"]
+ignore = ["N803", "N806"]  # X / y are idiomatic matrix names in ML code
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["integration: needs the docker compose stack"]
 addopts = "-ra"
-filterwarnings = ["error::FutureWarning"]
+filterwarnings = ["error::FutureWarning", "ignore::PendingDeprecationWarning:shap"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["smartbuilding"]

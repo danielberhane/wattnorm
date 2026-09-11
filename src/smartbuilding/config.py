@@ -49,6 +49,7 @@ class Rules(BaseModel):
     stuck_slots: int
     close_after_in_band_slots: int
     weather_stale_hours: int
+    level_halflife_days: float = 7.0
 
 
 class Sustainability(BaseModel):
@@ -80,6 +81,6 @@ class Env(BaseSettings):
     mqtt_tls: bool = False
     db_url: str = "postgresql://postgres:postgres@localhost:5432/smartbuilding"
     mlflow_tracking_uri: str = "http://localhost:5000"
-    model_uri: str = "models:/smartbuilding-detector/Production"
+    model_uri: str = "models:/smartbuilding-detector@production"
     emission_factor_kg_per_kwh: float = 0.25
     tariff_usd_per_kwh: float = 0.14

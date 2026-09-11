@@ -120,6 +120,21 @@ If spikes < ×1.3 are missed and matter → add a lag model as a second `Detecto
 
 ---
 
+### Phase 2 outcome (2026-09-11)
+- **Level tracking added** (`rules.level_halflife_days`): a 3-day EWMA of the kW residual tracks the building's
+  current level; z and the displayed band are relative to it. Needed because the context-only residual is
+  autocorrelated (lag-1 ≈ 0.8) and its monthly mean wanders ±1.5σ year over year — without it CUSUM flagged
+  whole months (12 FA/week). A permanent shift becomes the new normal within ~a week; retraining absorbs it.
+- **Rules tuned on 2018 only**: `cusum_k=1.0, cusum_h=12, spike_z=4`. `k` is the dominant lever (k=0.5 → 7.4
+  FA/week, k=1.0 → 1.2, k=1.5 → 0.5 with reduced sensitivity to small offsets).
+- **Held-out 2019 result**: 1.84 FA/week, 91 % coverage, recall 93–100 % on all six types, offsets in 3 min;
+  beats seasonal-naive on every type. GATE PASS. Model v3 → alias `production`.
+- **Full-series check**: COVID drop appears as SUSTAINED_LOW in 2020-03/04 as intended; alert density stays
+  elevated through 2021 with the 2016–17 model → Phase 4 retraining is justified.
+- MLflow **aliases** (`@staging`, `@production`) instead of deprecated stages. `MODEL_URI=models:/smartbuilding-detector@production`.
+- Precision/F1 in the eval table are dominated by injection density (3 events/year vs ~100 FA); read
+  `fa_per_week`, `recall`, `ttd_median_min`, `coverage` as the headline numbers.
+
 ## Phase 3 — Real-time stack
 
 **Goal:** `make up && make replay` → simulator → MQTT → scorer → TimescaleDB → Grafana with live, explainable alerts and sustainability counters.
