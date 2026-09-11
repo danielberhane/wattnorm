@@ -26,11 +26,11 @@ def test_gate_passes_when_better_than_baseline_and_within_limits():
 
     idx = ["spike", "sustained_offset", "clean"]
     ours = pd.DataFrame(
-        {"f1": [0.9, 0.9, float("nan")], "fa_per_week": [0, 0, 2.0], "coverage": [0, 0, 0.9]},
+        {"recall": [0.9, 0.9, float("nan")], "fa_per_week": [0, 0, 2.0], "coverage": [0, 0, 0.9]},
         index=idx,
     )
-    base = pd.DataFrame({"f1": [0.5, 0.5, float("nan")]}, index=idx)
-    ok, reasons = gate(ours, base, max_fa_per_week=3, coverage=(0.85, 0.95))
+    base = pd.DataFrame({"recall": [0.5, 0.5, float("nan")]}, index=idx)
+    ok, reasons = gate(ours, base, max_fa_per_week=3, coverage=(0.80, 0.97))
     assert ok and reasons == []
 
 
@@ -39,11 +39,22 @@ def test_gate_fails_and_explains():
 
     idx = ["spike", "clean"]
     ours = pd.DataFrame(
-        {"f1": [0.4, float("nan")], "fa_per_week": [0, 5.0], "coverage": [0, 0.80]}, index=idx
+        {"recall": [0.4, float("nan")], "fa_per_week": [0, 5.0], "coverage": [0, 0.70]}, index=idx
     )
-    base = pd.DataFrame({"f1": [0.5, float("nan")]}, index=idx)
-    ok, reasons = gate(ours, base, max_fa_per_week=3, coverage=(0.85, 0.95))
+    base = pd.DataFrame({"recall": [0.5, float("nan")]}, index=idx)
+    ok, reasons = gate(ours, base, max_fa_per_week=3, coverage=(0.80, 0.97))
     assert not ok
-    assert any("spike" in r for r in reasons)
+    assert any("spike" in r and "recall" in r for r in reasons)
     assert any("false alarms" in r for r in reasons)
     assert any("coverage" in r for r in reasons)
+
+
+def test_calibration_is_immune_to_a_level_shift_in_the_calibration_period():
+    """A regime break during calibration must not blow the band wide open."""
+    train = synthetic("2017-01-01", 365, seed=1)
+    cal = synthetic("2018-01-01", 90, seed=2)
+    shifted = cal.copy()
+    shifted.loc[45 * 96 :, "kw"] -= 30.0  # the building changes regime half-way through
+    _, m_clean = train_detector(train, cal, PARAMS, RULES, TZ, "a")
+    _, m_shift = train_detector(train, shifted, PARAMS, RULES, TZ, "b")
+    assert m_shift["calibration_factor"] < 1.5 * m_clean["calibration_factor"]

@@ -1,4 +1,4 @@
-.PHONY: setup lint test train train-local eval eval-local up down replay retrain logs
+.PHONY: setup lint test train train-local eval eval-local up down replay backfill live retrain logs weather
 START ?= 2020-01-01
 INJECT ?=
 AS_OF ?=
@@ -33,8 +33,17 @@ up:
 down:
 	docker compose down $(if $(VOLUMES),-v,)
 
-replay:
-	docker compose --profile replay run --rm simulator --start $(START) $(if $(INJECT),--inject $(INJECT),)
+SPEED ?= 96
+END ?=
+
+replay:  ## generic: START=… END=… SPEED=… INJECT=…
+	docker compose --profile replay run --rm simulator --start $(START) $(if $(END),--end $(END),) --speed $(SPEED) $(if $(INJECT),--inject $(INJECT),)
+
+backfill:  ## fast: load the whole replay period (2020-01 → 2021-05) so history is browsable
+	docker compose --profile replay run --rm -d simulator --start 2020-01-01 --end 2021-05-31 --speed 30000
+
+live:  ## human-paced demo: one building day per ~15 real minutes, from START
+	docker compose --profile replay run --rm simulator --start $(START) --speed 96 $(if $(INJECT),--inject $(INJECT),)
 
 retrain:
 	docker compose --profile train run --rm trainer $(if $(AS_OF),--as-of $(AS_OF),)

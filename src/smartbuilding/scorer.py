@@ -23,6 +23,9 @@ from smartbuilding.mqtt import DemandMsg, WeatherMsg
 
 log = logging.getLogger(__name__)
 
+# a reading more than this far behind the last one means a replay/backfill restarted
+REPLAY_RESET_AFTER = timedelta(days=1)
+
 
 # ---------------------------------------------------------------- storage interface
 
@@ -118,8 +121,18 @@ class ScorerCore:
                 msg.meter_id, MeterState(detector_state=self.detector.new_state())
             )
             if state.last_ts is not None and msg.ts <= state.last_ts:
-                log.warning("ignoring out-of-order reading %s @ %s", msg.meter_id, msg.ts)
-                return
+                if state.last_ts - msg.ts > REPLAY_RESET_AFTER:
+                    log.warning(
+                        "reading %s @ %s is far in the past: resetting meter state",
+                        msg.meter_id,
+                        msg.ts,
+                    )
+                    state = self.meters[msg.meter_id] = MeterState(
+                        detector_state=self.detector.new_state()
+                    )
+                else:
+                    log.warning("ignoring out-of-order reading %s @ %s", msg.meter_id, msg.ts)
+                    return
             wx, stale = self._weather_for(msg.ts)
             row = pd.DataFrame([{"ts": msg.ts, "kw": msg.kw, **wx}])
             row["ts"] = pd.to_datetime(row["ts"], utc=True)

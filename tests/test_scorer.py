@@ -110,3 +110,13 @@ def test_swap_detector_keeps_state_but_changes_version(core, detector):
     core.handle_demand(DemandMsg(meter_id="bldg-a", ts=ts + timedelta(minutes=15), kw=200.0))
     assert core.sink.scores[-1]["model_version"] == "v2"
     assert core.health()["meters"]["bldg-a"]["n_scored"] == 2
+
+
+def test_jump_far_into_the_past_resets_meter_state_instead_of_ignoring(core):
+    ts = datetime(2020, 6, 1, tzinfo=UTC)
+    core.handle_weather(_weather(ts))
+    core.handle_demand(DemandMsg(meter_id="bldg-a", ts=ts, kw=200.0))
+    # a replay restarted from an earlier date: > 1 day back → treat as a new session
+    core.handle_demand(DemandMsg(meter_id="bldg-a", ts=ts - timedelta(days=30), kw=200.0))
+    assert len(core.sink.scores) == 2
+    assert core.health()["meters"]["bldg-a"]["n_scored"] == 1  # state was reset

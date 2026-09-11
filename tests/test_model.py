@@ -50,22 +50,22 @@ def test_calibrator_round_trips_through_dict(fitted):
 
 def test_cusum_does_not_trip_on_standard_noise():
     rng = np.random.default_rng(0)
-    c = CUSUM(k=1.0, h=12.0)
+    c = CUSUM(k=1.5, h=12.0)
     assert all(c.update(z) == 0 for z in rng.normal(0, 1, 1000))
 
 
 def test_cusum_trips_quickly_and_in_the_right_direction_after_shift():
-    c = CUSUM(k=1.0, h=12.0)
-    steps = [c.update(z) for z in [2.0] * 15]
-    assert 1 in steps and steps.index(1) <= 12
-    c = CUSUM(k=1.0, h=12.0)
-    steps = [c.update(z) for z in [-2.0] * 15]
+    c = CUSUM(k=1.5, h=12.0)
+    steps = [c.update(z) for z in [3.0] * 15]
+    assert 1 in steps and steps.index(1) <= 9
+    c = CUSUM(k=1.5, h=12.0)
+    steps = [c.update(z) for z in [-3.0] * 15]
     assert -1 in steps
 
 
 def test_cusum_resets_after_trip():
-    c = CUSUM(k=1.0, h=12.0)
-    [c.update(2.0) for _ in range(15)]
+    c = CUSUM(k=1.5, h=12.0)
+    [c.update(3.0) for _ in range(15)]
     assert c.s_pos < 12.0
 
 

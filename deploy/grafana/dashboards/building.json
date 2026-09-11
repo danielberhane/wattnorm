@@ -6,12 +6,12 @@
  ],
  "timezone": "browser",
  "schemaVersion": 39,
- "version": 5,
+ "version": 6,
  "editable": true,
  "refresh": "1m",
  "time": {
-  "from": "now-24h",
-  "to": "now"
+  "from": "2020-01-01T00:00:00.000Z",
+  "to": "2020-02-01T00:00:00.000Z"
  },
  "templating": {
   "list": [
@@ -1187,5 +1187,6 @@
     }
    }
   }
- ]
+ ],
+ "description": "Replay mode: data is historical (2020-01 \u2192 2021-05). Adjust the time range to explore; in live mode set the default back to now-24h."
 }

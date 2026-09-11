@@ -200,6 +200,22 @@ uv run pytest -q
 
 ---
 
+### Phase 3–4 outcome (2026-09-11)
+- Stack runs; full replay of 2020-01 → 2021-05 (real data, no injection) backfilled at 30,000×; scoring latency ~15 ms.
+- **Level-adjusted calibration**: the band factor is fit on the same level-adjusted residual the scorer uses.
+  Found when the first retrain calibrated on the lockdown months and produced a band covering 100 % (detected
+  nothing) — the gate refused it. Factor on 2018 dropped 2.12 → 1.59; rules re-tuned on 2018 → `k=1.5, h=12,
+  spike_z=5`. Held-out 2019: 1.73 FA/week, recall 93–100 %, coverage 0.81 (a 2018-frozen model is stale by
+  late 2019 — the argument for nightly retraining).
+- **Gate compares recall / FA-per-week / coverage**, not F1 (F1 with 3 injected events per year only proxies
+  FA count). Coverage health bound 0.80 matches the Grafana alert.
+- Retrain as-of 2020-09-01: pipeline works; gate correctly kept production (candidate quieter but less sensitive
+  on Jun–Aug 2020).
+- Scorer treats a reading > 1 day older than the last as a replay restart; mosquitto queue unbounded so fast
+  replays never drop messages. SUSTAINED supersedes SPIKE; CUSUM input winsorised at spike_z.
+- Host ports: TimescaleDB 5433, MLflow 5001, scorer 8001 (5432/5000/8000 were taken on this machine).
+- Runbook: `docs/runbook.md`.
+
 ## Makefile
 `make setup lint test train eval up down replay [START= INJECT=] retrain [AS_OF=]`
 

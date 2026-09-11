@@ -126,3 +126,9 @@ def test_run_eval_returns_one_row_per_type_plus_clean(detector):
         assert col in table.columns
     assert table.loc["sustained_offset", "recall"] > 0.5
     assert table.loc["clean", "coverage"] > 0.8
+
+
+def test_inject_many_fits_two_of_each_type_in_a_three_month_window():
+    df = synthetic("2020-06-01", 92, seed=8)
+    _, labels = inject_many(df, n_per_type=2, rng=np.random.default_rng(8))
+    assert len(labels) == 2 * len(ANOMALY_TYPES)

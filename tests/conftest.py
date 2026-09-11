@@ -18,8 +18,8 @@ PARAMS = ModelParams(
 )
 # mirrors configs/default.yaml — the rules actually deployed
 RULES = Rules(
-    spike_z=4.0,
-    cusum_k=1.0,
+    spike_z=5.0,
+    cusum_k=1.5,
     cusum_h=12.0,
     stuck_slots=8,
     close_after_in_band_slots=8,

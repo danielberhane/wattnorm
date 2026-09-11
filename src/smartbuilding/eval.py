@@ -28,6 +28,11 @@ ANOMALY_TYPES = [
 ]
 
 
+_PLACEMENT_ORDER = [
+    "slow_drift", "schedule_shift", "sustained_offset", "stuck_meter", "dropout", "spike",
+]  # fmt: skip
+
+
 # ---------------------------------------------------------------- injection
 
 
@@ -83,9 +88,10 @@ def inject_many(
     """Inject n anomalies of each type at non-overlapping positions with ≥ min_gap slots between."""
     out = df
     labels: list[dict] = []
-    for kind in types:
+    # place the longest anomalies first so short ones do not fragment the free space
+    for kind in sorted(types, key=lambda k: _PLACEMENT_ORDER.index(k)):
         for _ in range(n_per_type):
-            for _attempt in range(200):
+            for _attempt in range(500):
                 candidate, label = inject(out, kind, rng)
                 if all(
                     label["start"] > lb["end"] + min_gap or label["end"] < lb["start"] - min_gap

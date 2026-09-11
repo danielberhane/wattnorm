@@ -11,7 +11,7 @@ def test_load_config_reads_default_yaml():
     assert cfg.site.tz == "America/New_York"
     assert cfg.splits.train == ("2016-01-01", "2017-12-31")
     assert cfg.model.quantiles == [0.05, 0.5, 0.95]
-    assert cfg.rules.spike_z == 4.0
+    assert cfg.rules.spike_z == 5.0
     assert cfg.paths.demand_csv == Path("data/raw/demand.csv")
 
 
