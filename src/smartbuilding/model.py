@@ -243,7 +243,9 @@ class Detector:
             return fired
         if abs(z) > self.rules.spike_z:
             fired.add("SPIKE_HIGH" if z > 0 else "SPIKE_LOW")
-        direction = state.cusum.update(float(z))
+        # winsorised CUSUM: one slot contributes at most spike_z − k, so a lone spike can
+        # never trip it — SUSTAINED means at least ~1 h of deviation
+        direction = state.cusum.update(float(np.clip(z, -self.rules.spike_z, self.rules.spike_z)))
         if direction > 0:
             fired.add("SUSTAINED_HIGH")
         elif direction < 0:
@@ -255,6 +257,11 @@ class Detector:
         return fired
 
     def _update_open_alerts(self, state: DetectorState, fired: set[str], in_band: bool) -> str:
+        # a spike that keeps going *is* the sustained event: SUSTAINED supersedes SPIKE
+        for direction in ("HIGH", "LOW"):
+            if f"SUSTAINED_{direction}" in fired | set(state.open_alerts):
+                fired.discard(f"SPIKE_{direction}")
+                state.open_alerts.pop(f"SPIKE_{direction}", None)
         for t in fired:
             state.open_alerts[t] = 0
         for t in list(state.open_alerts):

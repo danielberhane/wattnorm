@@ -1,0 +1,110 @@
+# Local stack. `make up` / `make replay` / `make train` / `make eval` / `make down`.
+# Swapping the broker or DB for a managed service is a .env change, not a code change.
+x-app: &app
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile
+  image: smartbuilding:local
+  environment:  # in-network defaults; override any of these in .env (optional, gitignored)
+    MQTT_HOST: ${MQTT_HOST:-mosquitto}
+    MQTT_PORT: ${MQTT_PORT:-1883}
+    MQTT_TLS: ${MQTT_TLS:-false}
+    DB_URL: ${DB_URL:-postgresql://postgres:postgres@timescaledb:5432/smartbuilding}
+    MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+    MODEL_URI: ${MODEL_URI:-models:/smartbuilding-detector@production}
+    EMISSION_FACTOR_KG_PER_KWH: ${EMISSION_FACTOR_KG_PER_KWH:-0.25}
+    TARIFF_USD_PER_KWH: ${TARIFF_USD_PER_KWH:-0.14}
+  volumes:
+    - ./data:/app/data
+  networks: [sb]
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes: [./deploy/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro]
+    ports: ["1883:1883"]
+    networks: [sb]
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: smartbuilding
+    volumes:
+      - tsdb:/var/lib/postgresql/data
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["${TSDB_HOST_PORT:-5433}:5432"]  # host 5433: 5432 is often taken by another Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d smartbuilding"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [sb]
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.4.0
+    command: >
+      sh -c "pip install -q psycopg2-binary &&
+             mlflow server --host 0.0.0.0 --port 5000
+             --backend-store-uri postgresql://postgres:postgres@timescaledb:5432/mlflow
+             --artifacts-destination /mlflow/artifacts --serve-artifacts"
+    volumes: [mlflow:/mlflow]
+    ports: ["${MLFLOW_HOST_PORT:-5001}:5000"]  # host 5001: macOS AirPlay squats on 5000
+    depends_on:
+      timescaledb: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:5000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks: [sb]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_DEFAULT_THEME: light
+      GF_AUTH_ANONYMOUS_ENABLED: "true"      # building managers view without an account (local stack)
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on:
+      timescaledb: { condition: service_healthy }
+    networks: [sb]
+
+  scorer:
+    <<: *app
+    command: ["scorer"]
+    ports: ["${SCORER_HOST_PORT:-8001}:8000"]  # host 8001: 8000 is commonly in use
+    depends_on:
+      timescaledb: { condition: service_healthy }
+      mlflow: { condition: service_healthy }
+      mosquitto: { condition: service_started }
+    restart: unless-stopped
+
+  simulator:
+    <<: *app
+    profiles: [replay]
+    entrypoint: ["/entrypoint.sh", "simulator"]  # so `run simulator --start …` appends args
+    command: []
+    depends_on: [mosquitto]
+
+  trainer:
+    <<: *app
+    profiles: [train]
+    command: ["train"]
+    depends_on:
+      mlflow: { condition: service_healthy }
+
+networks:
+  sb: {}
+
+volumes:
+  tsdb: {}
+  mlflow: {}
+  grafana: {}

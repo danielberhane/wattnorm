@@ -79,8 +79,8 @@ class Env(BaseSettings):
     mqtt_host: str = "localhost"
     mqtt_port: int = 1883
     mqtt_tls: bool = False
-    db_url: str = "postgresql://postgres:postgres@localhost:5432/smartbuilding"
-    mlflow_tracking_uri: str = "http://localhost:5000"
+    db_url: str = "postgresql://postgres:postgres@localhost:5433/smartbuilding"
+    mlflow_tracking_uri: str = "http://localhost:5001"
     model_uri: str = "models:/smartbuilding-detector@production"
     emission_factor_kg_per_kwh: float = 0.25
     tariff_usd_per_kwh: float = 0.14

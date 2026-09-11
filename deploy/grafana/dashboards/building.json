@@ -1,0 +1,1191 @@
+{
+ "uid": "smartbuilding-overview",
+ "title": "Building Energy Anomalies",
+ "tags": [
+  "smartbuilding"
+ ],
+ "timezone": "browser",
+ "schemaVersion": 39,
+ "version": 5,
+ "editable": true,
+ "refresh": "1m",
+ "time": {
+  "from": "now-24h",
+  "to": "now"
+ },
+ "templating": {
+  "list": [
+   {
+    "name": "meter",
+    "type": "query",
+    "label": "Meter",
+    "datasource": {
+     "type": "grafana-postgresql-datasource",
+     "uid": "timescaledb"
+    },
+    "refresh": 1,
+    "query": "SELECT DISTINCT meter_id FROM scores ORDER BY 1",
+    "current": {
+     "text": "bldg-a",
+     "value": "bldg-a"
+    },
+    "definition": "SELECT DISTINCT meter_id FROM scores ORDER BY 1"
+   },
+   {
+    "name": "emission_factor",
+    "type": "textbox",
+    "label": "kg CO\u2082e / kWh",
+    "query": "0.25",
+    "hide": 0,
+    "current": {
+     "text": "0.25",
+     "value": "0.25"
+    },
+    "options": [
+     {
+      "text": "0.25",
+      "value": "0.25",
+      "selected": true
+     }
+    ]
+   },
+   {
+    "name": "tariff",
+    "type": "textbox",
+    "label": "USD / kWh",
+    "query": "0.14",
+    "hide": 0,
+    "current": {
+     "text": "0.14",
+     "value": "0.14"
+    },
+    "options": [
+     {
+      "text": "0.14",
+      "value": "0.14",
+      "selected": true
+     }
+    ]
+   }
+  ]
+ },
+ "annotations": {
+  "list": [
+   {
+    "name": "Alerts",
+    "datasource": {
+     "type": "grafana-postgresql-datasource",
+     "uid": "timescaledb"
+    },
+    "enable": true,
+    "iconColor": "#e34948",
+    "target": {
+     "rawQuery": true,
+     "format": "table",
+     "rawSql": "SELECT started_at AS time, coalesce(ended_at, now()) AS timeend, alert_type AS text, alert_type AS tags FROM alerts WHERE $__timeFilter(started_at) AND meter_id = '$meter'"
+    }
+   }
+  ]
+ },
+ "panels": [
+  {
+   "id": 100,
+   "type": "row",
+   "title": "Building",
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 1,
+   "type": "timeseries",
+   "title": "Demand vs expected",
+   "description": "Blue = metered demand. Orange dashed = what the building should draw for this time and weather, adjusted for its recent level. Shaded band = 90 % expected range. Alerts appear as vertical markers.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 1,
+    "w": 24,
+    "h": 10
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "time_series",
+     "rawQuery": true,
+     "rawSql": "SELECT ts AS time, actual_kw AS \"Actual\", expected_kw AS \"Expected\", lower_kw AS \"lower\", upper_kw AS \"upper\" FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter' ORDER BY ts"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatt",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#2a78d6"
+     },
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": false,
+      "axisSoftMin": null
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Actual"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#2a78d6"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Expected"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#eb6834"
+        }
+       },
+       {
+        "id": "custom.lineStyle",
+        "value": {
+         "fill": "dash",
+         "dash": [
+          6,
+          4
+         ]
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "upper"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9ec5f4"
+        }
+       },
+       {
+        "id": "custom.lineWidth",
+        "value": 0
+       },
+       {
+        "id": "custom.fillOpacity",
+        "value": 25
+       },
+       {
+        "id": "custom.fillBelowTo",
+        "value": "lower"
+       },
+       {
+        "id": "custom.hideFrom",
+        "value": {
+         "legend": true,
+         "tooltip": false,
+         "viz": false
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "lower"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#9ec5f4"
+        }
+       },
+       {
+        "id": "custom.lineWidth",
+        "value": 0
+       },
+       {
+        "id": "custom.hideFrom",
+        "value": {
+         "legend": true,
+         "tooltip": false,
+         "viz": false
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "id": 2,
+   "type": "timeseries",
+   "title": "Residual z (how many \u03c3 from expected)",
+   "description": "Single-slot spikes fire above |z| = 4 (dashed). Sustained deviations accumulate in CUSUM (next panel).",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 11,
+    "w": 16,
+    "h": 7
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "time_series",
+     "rawQuery": true,
+     "rawSql": "SELECT ts AS time, z AS \"z\" FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter' ORDER BY ts"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#2a78d6"
+     },
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": false,
+      "axisSoftMin": null,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "transparent",
+        "value": null
+       },
+       {
+        "color": "#e34948",
+        "value": 4
+       }
+      ]
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "z"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#52514e"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "CUSUM (sustained deviation)",
+   "description": "Trips at 12 \u2192 SUSTAINED_HIGH / SUSTAINED_LOW alert.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 11,
+    "w": 8,
+    "h": 7
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "time_series",
+     "rawQuery": true,
+     "rawSql": "SELECT ts AS time, cusum_pos AS \"High side\", cusum_neg AS \"Low side\" FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter' ORDER BY ts"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "none",
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#2a78d6"
+     },
+     "custom": {
+      "lineWidth": 2,
+      "fillOpacity": 0,
+      "showPoints": "never",
+      "spanNulls": false,
+      "axisSoftMin": null,
+      "thresholdsStyle": {
+       "mode": "dashed"
+      }
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "transparent",
+        "value": null
+       },
+       {
+        "color": "#e34948",
+        "value": 12
+       }
+      ]
+     }
+    },
+    "overrides": [
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "High side"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#eb6834"
+        }
+       }
+      ]
+     },
+     {
+      "matcher": {
+       "id": "byName",
+       "options": "Low side"
+      },
+      "properties": [
+       {
+        "id": "color",
+        "value": {
+         "mode": "fixed",
+         "fixedColor": "#2a78d6"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "options": {
+    "legend": {
+     "displayMode": "list",
+     "placement": "bottom",
+     "showLegend": true
+    },
+    "tooltip": {
+     "mode": "multi",
+     "sort": "none"
+    }
+   }
+  },
+  {
+   "id": 101,
+   "type": "row",
+   "title": "Sustainability (this time range)",
+   "gridPos": {
+    "x": 0,
+    "y": 18,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 4,
+   "type": "stat",
+   "title": "Open alerts",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 19,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT count(*) AS value FROM alerts WHERE ended_at IS NULL AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#e34948"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#e34948",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 5,
+   "type": "stat",
+   "title": "Excess energy",
+   "description": "Energy above the upper expected band \u2014 avoidable consumption.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 19,
+    "w": 5,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT coalesce(sum(excess_kwh),0) AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatth",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#eb6834"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#eb6834",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 6,
+   "type": "stat",
+   "title": "Avoidable CO\u2082e",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 9,
+    "y": 19,
+    "w": 5,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT coalesce(sum(excess_kwh),0) * ${emission_factor} AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "masskg",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#eb6834"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#eb6834",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 7,
+   "type": "stat",
+   "title": "Avoidable cost",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 14,
+    "y": 19,
+    "w": 5,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT coalesce(sum(excess_kwh),0) * ${tariff} AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "currencyUSD",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#eb6834"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#eb6834",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 8,
+   "type": "stat",
+   "title": "Alerts in range",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 19,
+    "y": 19,
+    "w": 5,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT count(*) AS value FROM alerts WHERE $__timeFilter(started_at) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#52514e",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 9,
+   "type": "table",
+   "title": "Alerts",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 23,
+    "w": 24,
+    "h": 9
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT started_at AS \"Started\", alert_type AS \"Type\", round(extract(epoch FROM coalesce(ended_at, now()) - started_at)/60) AS \"Minutes\", round(observed_kw::numeric,1) AS \"Observed kW\", round(expected_kw::numeric,1) AS \"Expected kW\", round(peak_z::numeric,1) AS \"Peak z\", round(excess_kwh::numeric,1) AS \"Excess kWh\", round(co2_kg::numeric,1) AS \"CO2 kg\", round(cost_usd::numeric,2) AS \"USD\", (SELECT string_agg(d->>'feature' || ' ' || to_char((d->>'contribution_kw')::numeric,'SG990.0') || ' kW', ', ')  FROM jsonb_array_elements(drivers) d) AS \"Why (top drivers of expectation)\", CASE WHEN ended_at IS NULL THEN 'OPEN' ELSE 'closed' END AS \"State\", model_version AS \"Model\" FROM alerts WHERE $__timeFilter(started_at) AND meter_id = '$meter' ORDER BY started_at DESC LIMIT 100"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "custom": {
+      "align": "auto",
+      "cellOptions": {
+       "type": "auto"
+      },
+      "inspect": false
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       }
+      ]
+     },
+     "color": {
+      "mode": "thresholds"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "showHeader": true,
+    "cellHeight": "sm",
+    "footer": {
+     "show": false,
+     "reducer": [
+      "sum"
+     ],
+     "countRows": false,
+     "fields": ""
+    }
+   },
+   "pluginVersion": "11.3.0",
+   "transformations": []
+  },
+  {
+   "id": 102,
+   "type": "row",
+   "title": "System health",
+   "gridPos": {
+    "x": 0,
+    "y": 32,
+    "w": 24,
+    "h": 1
+   },
+   "collapsed": false
+  },
+  {
+   "id": 10,
+   "type": "stat",
+   "title": "Since last reading",
+   "description": "Replay runs faster than wall-clock; in live mode expect \u2264 900 s.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 33,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT extract(epoch FROM now() - max(ts)) AS value FROM scores WHERE meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s",
+     "decimals": 0,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#52514e",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 11,
+   "type": "stat",
+   "title": "Scoring latency p95",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 4,
+    "y": 33,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "ms",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#52514e",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 12,
+   "type": "stat",
+   "title": "Band coverage",
+   "description": "Share of readings inside the 90 % band. Healthy: 0.85\u20130.95.",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 8,
+    "y": 33,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT avg((actual_kw BETWEEN lower_kw AND upper_kw)::int) AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#52514e",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 13,
+   "type": "stat",
+   "title": "MAE",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 33,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT avg(abs(actual_kw - expected_kw)) AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "kwatt",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#52514e",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 14,
+   "type": "stat",
+   "title": "Stale-weather share",
+   "description": "",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 16,
+    "y": 33,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT avg(weather_stale::int) AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "decimals": 1,
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     },
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "#52514e",
+        "value": null
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "value",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    }
+   }
+  },
+  {
+   "id": 15,
+   "type": "stat",
+   "title": "Model",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "timescaledb"
+   },
+   "gridPos": {
+    "x": 20,
+    "y": 33,
+    "w": 4,
+    "h": 4
+   },
+   "targets": [
+    {
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "timescaledb"
+     },
+     "refId": "A",
+     "format": "table",
+     "rawQuery": true,
+     "rawSql": "SELECT model_version AS value FROM scores WHERE meter_id = '$meter' ORDER BY ts DESC LIMIT 1"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "color": {
+      "mode": "fixed",
+      "fixedColor": "#52514e"
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "colorMode": "none",
+    "graphMode": "none",
+    "textMode": "value",
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "/.*/",
+     "values": false
+    }
+   }
+  }
+ ]
+}

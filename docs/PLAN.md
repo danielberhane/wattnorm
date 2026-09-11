@@ -168,7 +168,7 @@ schema rejects negative kw / missing offset · scorer: 10 msgs via in-proc queue
 make up                                   # docker compose up -d --build ; Grafana at :3000, MLflow at :5000
 make replay                               # simulator from 2020-01-01 at 60× ; Jan–Mar quiet, SUSTAINED_LOW from April (COVID) — expected
 make replay START=2019-06-01 INJECT=sustained_offset    # SUSTAINED_HIGH with drivers; kWh/CO₂ tiles increase
-curl localhost:8000/health
+curl localhost:8001/health
 docker compose exec timescaledb psql -U postgres -c "select alert_type,count(*) from alerts group by 1"
 uv run pytest -q -m "not integration" && uv run pytest -q -m integration
 ```

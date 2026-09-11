@@ -40,7 +40,11 @@ ignore = ["N803", "N806"]  # X / y are idiomatic matrix names in ML code
 testpaths = ["tests"]
 markers = ["integration: needs the docker compose stack"]
 addopts = "-ra"
-filterwarnings = ["error::FutureWarning", "ignore::PendingDeprecationWarning:shap"]
+filterwarnings = [
+    "error::FutureWarning",
+    "ignore::PendingDeprecationWarning:shap",
+    "ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["smartbuilding"]

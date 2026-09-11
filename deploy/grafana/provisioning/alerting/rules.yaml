@@ -1,0 +1,75 @@
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: smartbuilding
+    folder: Smart Building
+    interval: 1m
+    rules:
+      - uid: sb-open-alert
+        title: Building anomaly open
+        condition: C
+        for: 0s
+        labels: { severity: warning, team: facilities }
+        annotations:
+          summary: "An energy anomaly is open — see the Building Energy Anomalies dashboard."
+          dashboard_uid: smartbuilding-overview
+          panel_id: "1"
+        data:
+          - refId: A
+            datasourceUid: timescaledb
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              rawQuery: true
+              format: table
+              rawSql: SELECT count(*) AS open_alerts FROM alerts WHERE ended_at IS NULL
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+      - uid: sb-scorer-stale
+        title: Scorer has not scored for 30 minutes
+        condition: C
+        for: 5m
+        labels: { severity: critical, team: platform }
+        annotations:
+          summary: "No new score rows in 30 minutes: check simulator/meter → mosquitto → scorer."
+        data:
+          - refId: A
+            datasourceUid: timescaledb
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              rawQuery: true
+              format: table
+              rawSql: SELECT extract(epoch FROM now() - max(ts)) AS age_s FROM scores
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [1800] }
+      - uid: sb-coverage-low
+        title: Model band coverage below 80 %
+        condition: C
+        for: 10m
+        labels: { severity: warning, team: platform }
+        annotations:
+          summary: "Band coverage over the last 24 h fell below 80 % — model may be stale; consider `make retrain`."
+        data:
+          - refId: A
+            datasourceUid: timescaledb
+            relativeTimeRange: { from: 86400, to: 0 }
+            model:
+              rawQuery: true
+              format: table
+              rawSql: SELECT avg((actual_kw BETWEEN lower_kw AND upper_kw)::int) AS coverage FROM scores WHERE ts > now() - interval '24 hours'
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: lt, params: [0.80] }

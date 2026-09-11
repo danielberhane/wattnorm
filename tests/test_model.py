@@ -208,3 +208,13 @@ def test_detector_does_not_raise_rebound_alert_after_offset_ends(detector):
     scores, _ = detector.score(df)
     assert scores.loc[100:130, "alert_type"].str.contains("SUSTAINED_HIGH").any()
     assert not scores.loc[135:287, "alert_type"].str.contains("SUSTAINED_LOW").any()
+
+
+def test_sustained_alert_supersedes_spike_in_same_direction(detector):
+    df = synthetic("2018-07-01", 3, seed=60)
+    df.loc[100:130, "kw"] *= 1.5  # big enough to trip spikes every slot
+    scores, _ = detector.score(df)
+    window = scores.loc[100:130, "alert_type"]
+    assert window.str.contains("SUSTAINED_HIGH").any()
+    both = window.str.contains("SPIKE_HIGH") & window.str.contains("SUSTAINED_HIGH")
+    assert not both.any()
