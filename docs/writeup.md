@@ -397,20 +397,20 @@ Reliable detection starts around **+12–15 %** (28–35 kW on this building); b
 
 ### 9.3 The replay through the live system
 
-The complete 2020-01 to 2021-05 period — real readings only, no injection — streamed over MQTT into the deployed stack: **48,173 score rows for 48,172 readings** (the extra row is a boundary slot), zero message loss, about 15 ms scoring latency per reading. Alerts per month:
+The complete 2020-01 to 2021-05 period — real readings only, no injection — streamed over MQTT into the deployed stack, scored by the same registry model as §9.1: **48,164 score rows for 48,164 readings**, zero message loss, median scoring latency 9 ms (p95 12 ms) per reading. Band coverage in the stack's `scores` table: 0.68 in 2020 and 0.75 in 2021 — the same figures as the offline scoring of §9.4, which is the batch-equals-streaming property of §10.2 holding on real data. 260 alert events over the seventeen months. Alerts per month:
 
 | Month | Alerts | LOW | HIGH | Excess kWh | Note |
 |---|---|---|---|---|---|
-| 2020-01 | 14 | 6 | 8 | 102 | 3.2/week — inside the budget but above 2019's 1.7; also the level tracker's warm-up month |
-| 2020-02 | 9 | 1 | 8 | 211 | |
-| 2020-03 | 16 | **13** | 3 | 33 | lockdown begins; mean alert duration 34 h |
-| 2020-04 | 20 | **14** | 6 | 54 | |
-| 2020-05 | 31 | 2 | **29** | 816 | partial reopening reads as *high* against the newly learned low level |
-| 2020-06 to 2021-05 | 8–26 / month | | | | elevated relative to 2019, with a model two years stale |
+| 2020-01 | 10 | 3 | 7 | 127 | 2.3/week — inside the budget, close to 2019's 1.6; also the level tracker's warm-up month |
+| 2020-02 | 6 | 0 | 6 | 335 |  |
+| 2020-03 | 10 | **8** | 2 | 64 | lockdown begins; mean alert duration 59 h |
+| 2020-04 | 22 | **14** | 8 | 103 |  |
+| 2020-05 | 31 | 4 | **27** | 1577 | partial reopening reads as *high* against the newly learned low level |
+| 2020-06 to 2021-05 | 7–27 / month | | | | elevated relative to 2019, with a model two years stale |
 
 ![Figure 7 — replay alerts by month](img/fig7_replay_alerts.png)
 
-*Figure 7. Alert events per month from the live replay of real readings, coloured by direction. The frozen 2018 model sees the lockdown as weeks of "below expectation", then partial reopening as "above" the newly learned level. Offline scoring of the whole 2016–2021 series gives the same picture: 939 and 1,260 `SUSTAINED_LOW` slots in March and April 2020, almost nothing in the training years.*
+*Figure 7. Alert events per month from the live replay of real readings, coloured by direction. The frozen 2018 model sees the lockdown as weeks of "below expectation", then partial reopening as "above" the newly learned level. The stack's own scores show 1,065 and 726 `SUSTAINED_LOW` slots in March and April 2020, almost nothing in the training years.*
 
 The March–May 2020 sequence is what a manager would want explained on the dashboard: first "the building is running far below what it should" for weeks, then "it is running above what it just was". The second wave is correct relative to the recent level; whether it is useful depends on what the manager is asking.
 

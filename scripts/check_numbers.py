@@ -23,7 +23,7 @@ def expectations(n: dict) -> list[tuple[str, str, str]]:
     fa = det["clean"]["fa_per_week"]
     exp: list[tuple[str, str, str]] = [
         ("calibration factor", "writeup", f"{n['calibration_factor']:.2f}"),
-        ("clean FA/week 2019", "writeup", f"{fa:.2f} false alarms"),
+        ("clean FA/week 2019", "writeup", f"**{fa:.2f}**"),
         ("coverage 2019", "writeup", f"{det['clean']['coverage']:.2f}"),
         ("baseline FA/week", "writeup", f"{base['clean']['fa_per_week']:.2f}"),
         ("trough hour", "writeup", f"{n['hour_min']:02d}:00"),
