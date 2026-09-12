@@ -47,7 +47,6 @@ def test_reload_model_reports_loader_failure(detector):
     assert "registry down" in r.json()["detail"]
 
 
-
 def test_watch_registry_downloads_only_when_alias_moves(detector, monkeypatch):
     import threading
     import time
