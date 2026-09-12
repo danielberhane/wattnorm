@@ -81,13 +81,24 @@ def start_consumer(core: ScorerCore, env: Env) -> None:
     client.loop_start()
 
 
-def watch_registry(core: ScorerCore, loader: Callable[[], Detector], every_s: float) -> None:
-    """Background poll: if the production alias moved, hot-swap without a restart."""
+def watch_registry(
+    core: ScorerCore,
+    loader: Callable[[], Detector],
+    every_s: float,
+    current_version: Callable[[], str] | None = None,
+) -> None:
+    """Background poll: if the production alias moved, hot-swap without a restart.
+
+    `current_version` is a cheap registry lookup (alias → version string); the full model is
+    downloaded only when it differs from the loaded one.
+    """
 
     def loop() -> None:
         while True:
             time.sleep(every_s)
             try:
+                if current_version and current_version() == core.detector.model_version:
+                    continue
                 detector = loader()
                 if detector.model_version != core.detector.model_version:
                     core.swap_detector(detector)
@@ -101,7 +112,7 @@ def watch_registry(core: ScorerCore, loader: Callable[[], Detector], every_s: fl
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     from smartbuilding.db import PostgresSink
-    from smartbuilding.registry import load_detector
+    from smartbuilding.registry import alias_version, load_detector
 
     cfg, env = load_config(), Env()
     mlflow.set_tracking_uri(env.mlflow_tracking_uri)
@@ -117,7 +128,7 @@ def main() -> None:
         tariff=env.tariff_usd_per_kwh,
     )
     start_consumer(core, env)
-    watch_registry(core, loader, every_s=600)
+    watch_registry(core, loader, every_s=600, current_version=lambda: alias_version(env.model_uri))
     uvicorn.run(create_app(core, loader), host="0.0.0.0", port=8000, log_level="warning")
 
 

@@ -67,6 +67,12 @@ def load_detector(model_uri: str) -> Detector:
     return detector
 
 
+def alias_version(model_uri: str) -> str:
+    """The model_version string `load_detector(model_uri)` would produce — one registry call,
+    no artifact download. Lets the scorer poll cheaply for a moved alias."""
+    return f"{MODEL_NAME}/{_resolve_version(model_uri)}"
+
+
 def _resolve_version(model_uri: str) -> str:
     ref = model_uri.removeprefix("models:/")
     if "@" in ref:

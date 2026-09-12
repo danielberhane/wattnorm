@@ -115,6 +115,7 @@ def main() -> None:
             "as_of": args.as_of.isoformat(),
             "window_months": args.window_months,
             **{k: "→".join(v) for k, v in windows.items()},
+            **{f"rule_{k}": v for k, v in cfg.rules.model_dump().items()},
         },
         metrics=summary,
         alias="production" if ok else "staging",

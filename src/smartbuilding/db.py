@@ -80,22 +80,4 @@ class PostgresSink:
             return
         sets = ", ".join(f"{k} = %s" for k in fields)
         vals = [Jsonb(v) if k == "drivers" else v for k, v in fields.items()]
-        self.conn.execute(f"UPDATE alerts SET {sets} WHERE id = %s", (*vals, alert_id))
-
-    # -- ops ---------------------------------------------------------------
-
-    def record_model_version(self, version: str, run_id: str | None, metrics: dict, promoted: bool):
-        self._run(
-            "INSERT INTO model_versions (version, run_id, f1, fa_per_week, coverage, promoted) "
-            "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (version) DO UPDATE SET "
-            "promoted = EXCLUDED.promoted, f1 = EXCLUDED.f1, fa_per_week = EXCLUDED.fa_per_week, "
-            "coverage = EXCLUDED.coverage",
-            (
-                version,
-                run_id,
-                metrics.get("f1"),
-                metrics.get("fa_per_week"),
-                metrics.get("coverage"),
-                promoted,
-            ),
-        )
+        self._run(f"UPDATE alerts SET {sets} WHERE id = %s", (*vals, alert_id))

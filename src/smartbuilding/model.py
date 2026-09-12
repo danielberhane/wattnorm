@@ -43,6 +43,7 @@ class QuantileLGBM:
                 learning_rate=self.params.learning_rate,
                 num_leaves=self.params.num_leaves,
                 min_child_samples=self.params.min_child_samples,
+                random_state=self.params.seed,
                 verbose=-1,
             )
             self.boosters[q] = m.fit(X[FEATURES], y)

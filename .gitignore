@@ -28,6 +28,7 @@ dist/
 .ipynb_checkpoints/
 .claude/settings.local.json
 legacy/chromedriver
+legacy/Untitled*.ipynb
 *.db
 *.sqlite*
 dashboard/

@@ -41,6 +41,7 @@ class ModelParams(BaseModel):
     num_leaves: int
     min_child_samples: int
     target_coverage: float
+    seed: int = 0
 
 
 class Rules(BaseModel):

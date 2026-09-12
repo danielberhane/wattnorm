@@ -72,3 +72,27 @@ def test_reading_score_and_alert_round_trip(sink):
         "SELECT excess_kwh, drivers->0->>'feature' FROM alerts WHERE id=%s", (alert_id,)
     )
     assert row == (1.5, "sin_tod")
+
+
+def test_update_alert_survives_a_dropped_connection(sink):
+    ts = datetime(2020, 1, 2, 5, 15, tzinfo=UTC)
+    alert_id = sink.open_alert(
+        {
+            "meter_id": "test-meter",
+            "alert_type": "SUSTAINED_LOW",
+            "started_at": ts,
+            "ended_at": None,
+            "peak_z": -2.5,
+            "excess_kwh": 0.0,
+            "co2_kg": 0.0,
+            "cost_usd": 0.0,
+            "observed_kw": 180.0,
+            "expected_kw": 220.0,
+            "drivers": {},
+            "model_version": "t",
+        }
+    )
+    sink.conn.close()  # simulate a database restart between two statements
+    sink.update_alert(alert_id, {"peak_z": -3.0})
+    row = sink.fetchone("SELECT peak_z FROM alerts WHERE id = %s", (alert_id,))
+    assert row[0] == -3.0

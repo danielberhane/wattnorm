@@ -27,6 +27,7 @@ model:
   num_leaves: 31
   min_child_samples: 50
   target_coverage: 0.90
+  seed: 0
 
 rules:
   spike_z: 5.0  # single-slot spike threshold in σ (tuned on 2018 with level-adjusted calibration)

@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from smartbuilding.mqtt import DemandMsg
@@ -44,3 +45,37 @@ def test_reload_model_reports_loader_failure(detector):
     r = client.post("/reload-model")
     assert r.status_code == 503
     assert "registry down" in r.json()["detail"]
+
+
+
+def test_watch_registry_downloads_only_when_alias_moves(detector, monkeypatch):
+    import threading
+    import time
+
+    from smartbuilding.service import watch_registry
+
+    core = _core(detector)
+    loads = []
+    ticks = iter(range(3))
+    monkeypatch.setattr(time, "sleep", lambda _s: next(ticks))  # StopIteration ends the loop
+    monkeypatch.setattr(threading, "Thread", lambda **kw: _Sync(kw["target"]))
+    versions = iter([detector.model_version, detector.model_version, "smartbuilding-detector/99"])
+
+    with pytest.raises(StopIteration):
+        watch_registry(
+            core,
+            lambda: loads.append(1) or detector,
+            every_s=0,
+            current_version=lambda: next(versions),
+        )
+    assert len(loads) == 1  # two unchanged polls skipped the download; the third fetched
+
+
+class _Sync:
+    """Stand-in for threading.Thread that runs the target inline on start()."""
+
+    def __init__(self, target):
+        self.target = target
+
+    def start(self):
+        self.target()

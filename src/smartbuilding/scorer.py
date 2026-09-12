@@ -244,6 +244,8 @@ class ScorerCore:
         with self._lock:
             return {
                 "model_version": self.detector.model_version,
+                "rules": self.detector.rules.model_dump(),
+                "calibration_factor": self.detector.calibrator.factor,
                 "stations": {k: v.ts.isoformat() for k, v in self.latest_weather.items()},
                 "meters": {
                     m: {

@@ -263,7 +263,7 @@
    "id": 2,
    "type": "timeseries",
    "title": "Residual z (how many \u03c3 from expected)",
-   "description": "Single-slot spikes fire above |z| = 4 (dashed). Sustained deviations accumulate in CUSUM (next panel).",
+   "description": "Single-slot spikes fire above |z| = 5 (dashed line mirrors rules.spike_z; the running value is in the scorer's /health). Sustained deviations accumulate in CUSUM (next panel).",
    "datasource": {
     "type": "grafana-postgresql-datasource",
     "uid": "timescaledb"
@@ -312,7 +312,7 @@
        },
        {
         "color": "#e34948",
-        "value": 4
+        "value": 5
        }
       ]
      }
@@ -526,7 +526,7 @@
    "id": 5,
    "type": "stat",
    "title": "Excess energy",
-   "description": "Energy above the upper expected band \u2014 avoidable consumption.",
+   "description": "Energy above the expected band during HIGH alerts that started in this range \u2014 the avoidable part. Readings outside an alert are not counted.",
    "datasource": {
     "type": "grafana-postgresql-datasource",
     "uid": "timescaledb"
@@ -546,7 +546,7 @@
      "refId": "A",
      "format": "table",
      "rawQuery": true,
-     "rawSql": "SELECT coalesce(sum(excess_kwh),0) AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+     "rawSql": "SELECT coalesce(sum(excess_kwh),0) AS value FROM alerts WHERE $__timeFilter(started_at) AND meter_id = '$meter' AND alert_type IN ('SPIKE_HIGH','SUSTAINED_HIGH')"
     }
    ],
    "fieldConfig": {
@@ -606,7 +606,7 @@
      "refId": "A",
      "format": "table",
      "rawQuery": true,
-     "rawSql": "SELECT coalesce(sum(excess_kwh),0) * ${emission_factor} AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+     "rawSql": "SELECT coalesce(sum(excess_kwh),0) * ${emission_factor} AS value FROM alerts WHERE $__timeFilter(started_at) AND meter_id = '$meter' AND alert_type IN ('SPIKE_HIGH','SUSTAINED_HIGH')"
     }
    ],
    "fieldConfig": {
@@ -666,7 +666,7 @@
      "refId": "A",
      "format": "table",
      "rawQuery": true,
-     "rawSql": "SELECT coalesce(sum(excess_kwh),0) * ${tariff} AS value FROM scores WHERE $__timeFilter(ts) AND meter_id = '$meter'"
+     "rawSql": "SELECT coalesce(sum(excess_kwh),0) * ${tariff} AS value FROM alerts WHERE $__timeFilter(started_at) AND meter_id = '$meter' AND alert_type IN ('SPIKE_HIGH','SUSTAINED_HIGH')"
     }
    ],
    "fieldConfig": {

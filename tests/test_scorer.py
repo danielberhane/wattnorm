@@ -98,6 +98,9 @@ def test_health_reports_model_version_and_last_score(core):
     assert h["model_version"] == "test"
     assert h["meters"]["bldg-a"]["last_ts"] == ts.isoformat()
     assert h["meters"]["bldg-a"]["open_alerts"] == []
+    # the running configuration is visible, not only the version string
+    assert h["rules"]["spike_z"] == core.detector.rules.spike_z
+    assert h["calibration_factor"] == pytest.approx(core.detector.calibrator.factor)
 
 
 def test_swap_detector_keeps_state_but_changes_version(core, detector):

@@ -3,6 +3,7 @@ name = "smartbuilding"
 version = "0.1.0"
 description = "Real-time contextual energy anomaly detection for buildings"
 requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
 dependencies = [
     "pandas>=2.2",
     "numpy>=1.26",

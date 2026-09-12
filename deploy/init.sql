@@ -60,15 +60,6 @@ CREATE TABLE alerts (
 );
 CREATE INDEX alerts_open_idx ON alerts (meter_id) WHERE ended_at IS NULL;
 
-CREATE TABLE model_versions (
-    version       text PRIMARY KEY,
-    registered_at timestamptz NOT NULL DEFAULT now(),
-    run_id        text,
-    f1            double precision,
-    fa_per_week   double precision,
-    coverage      double precision,
-    promoted      boolean NOT NULL DEFAULT false
-);
 
 -- MLflow keeps its own database on the same server
 CREATE DATABASE mlflow;
