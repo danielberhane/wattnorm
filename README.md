@@ -54,12 +54,13 @@ scorer http://localhost:8001/health
 
 ## Data
 
-`data/raw/demand.csv` (gitignored) is the 15-minute electric demand of **Clark Hall, Cornell University**
-(Ithaca, NY), January 2015 – May 2021, obtained from Cornell's Energy Management and Control System
-(EMCS) portal — Cornell University, Facilities and Campus Services, Energy and Sustainability,
-https://portal.emcs.cornell.edu. The data are Cornell's and are used here for research and educational
-purposes. Weather is the Open-Meteo ERA5 archive for the building's location (`make weather`). Design, phases and decisions: `docs/PLAN.md`.
-Operating guide for building managers: `docs/runbook.md`.
+`data/raw/demand.csv` (gitignored) is the 15-minute electric demand of Clark Hall, Cornell University.
+The data are not redistributed with this repository.
+
+> Cornell University, Facilities and Campus Services — Energy and Sustainability. *Energy Management and Control System (EMCS) Portal*, Clark Hall electric demand, 15-minute interval, January 2015 – May 2021. https://portal.emcs.cornell.edu (accessed 2022 for the original study; re-used here). Data are the property of Cornell University and are used for research and educational purposes.
+
+Weather is the Open-Meteo ERA5 archive for the building's location (`make weather`). Design, phases and
+decisions: `docs/PLAN.md`. Operating guide for building managers: `docs/runbook.md`.
 
 ## Connecting a real meter
 

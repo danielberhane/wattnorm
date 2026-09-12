@@ -69,9 +69,7 @@ The notebook's own correlation table pointed to a fourth issue: the five windowe
 
 ### 3.1 Demand
 
-**Source and credit.** The demand series is the electricity meter of **Clark Hall** on Cornell University's Ithaca campus, obtained from Cornell's **Energy Management and Control System (EMCS) portal** ([portal.emcs.cornell.edu](https://portal.emcs.cornell.edu)), operated by the Energy and Sustainability department of Cornell Facilities and Campus Services. The EMCS collects electricity, steam and chilled-water consumption from field meters across campus every 15 minutes and publishes it through the portal, which also offers daily-to-yearly downloads in CSV and spreadsheet form; Cornell surfaces the same data to the campus community through its [Big Red Energy Scoreboard](https://sustainablecampus.cornell.edu/campus-initiatives/buildings-energy/building-energy-dashboard). Cornell publishes no formal citation format for the portal; this project credits it as:
-
-> Cornell University, Facilities and Campus Services — Energy and Sustainability. *Energy Management and Control System (EMCS) Portal*, Clark Hall electric demand, 15-minute interval, January 2015 – May 2021. https://portal.emcs.cornell.edu (accessed 2022 for the original study; re-used here). Data are the property of Cornell University and are used for research and educational purposes.
+**Source and credit.** The demand series is the electricity meter of **Clark Hall** on Cornell University's Ithaca campus, obtained from Cornell's **Energy Management and Control System (EMCS) portal** ([portal.emcs.cornell.edu](https://portal.emcs.cornell.edu)), operated by the Energy and Sustainability department of Cornell Facilities and Campus Services. The EMCS collects electricity, steam and chilled-water consumption from field meters across campus every 15 minutes and publishes it through the portal, which also offers daily-to-yearly downloads in CSV and spreadsheet form; Cornell surfaces the same data to the campus community through its [Big Red Energy Scoreboard](https://sustainablecampus.cornell.edu/campus-initiatives/buildings-energy/building-energy-dashboard). The full credit is given at the end of this document.
 
 **The building.** Clark Hall (1965) is the physics building on the Arts Quad: home to the Department of Physics, the Laboratory of Atomic and Solid State Physics and parts of the Cornell Center for Materials Research — laboratories, clean rooms, machine shops, lecture rooms and offices. That mix matters for what the meter shows (§3.1, Figure 1): a research building carries a large always-on load from experimental equipment, cryogenics and continuous ventilation, on top of which a daytime occupancy rise and an evening peak sit.
 
@@ -567,3 +565,9 @@ Replay counts (§9.3): `SELECT count(*) FROM scores` against the readings publis
 | `z` | `(y − expected) / σ` — signed, standardised residual |
 | `s_pos, s_neg` | two-sided CUSUM sums on `clip(z, ±5)` with allowance k = 1.5; trip at h = 12 |
 | `excess_kwh` | `max(y − upper, 0) × 0.25 h` — energy above the normal range in the slot; the per-slot column is always computed, the alert record sums it over the alert's active slots |
+
+---
+
+## Data source
+
+Cornell University, Facilities and Campus Services — Energy and Sustainability. *Energy Management and Control System (EMCS) Portal*, Clark Hall electric demand, 15-minute interval, January 2015 – May 2021. https://portal.emcs.cornell.edu (accessed 2022 for the original study; re-used here). Data are the property of Cornell University and are used for research and educational purposes.
