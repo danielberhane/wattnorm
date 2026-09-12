@@ -8,7 +8,7 @@
 
 **Decisions:** detector = **A, residual-based** (one LightGBM quantile model, context-only); local **Docker Compose**; **MLflow** tracking + registry; **Open-Meteo** weather; strict temporal splits — train 2016–2017 · calibrate 2018 · test 2019 (full year, injected anomalies) · replay 2020-01 → 2021-05 (3 normal months then the COVID drop). The v4 autoencoder is an optional later extension, not the core.
 
-**Data:** demand 2015-01 → 2021-05, 15-min, 221k rows, mean 235 kW, 1.53 % missing in 200 gaps; 2015 ≈ 9 % higher, 2020 ≈ 10 % lower. Metric weather CSV 2016-01 → 2020-02 (`Pressure==0` nulls, gust outlier); imperial CSV 2015–2019.
+**Data:** demand 2015-01 → 2021-05, 15-min, 221k rows, mean 235 kW, 1.6 % missing in 202 gaps; 2015 ≈ 9 % higher, 2020 ≈ 10 % lower. Metric weather CSV 2016-01 → 2020-02 (`Pressure==0` nulls, gust outlier); imperial CSV 2015–2019.
 
 ## Design goals (priority order) and how the design meets them
 
@@ -155,7 +155,7 @@ tests/test_mqtt.py test_scorer.py (in-proc queue + stub detector) test_db.py (ag
 ### Contracts
 - **MQTT:** `building/{meter_id}/demand` → `{"meter_id":"bldg-a","ts":"2020-01-01T00:15:00-05:00","kw":231.4}`; `weather/{station_id}/obs` → WeatherMsg. QoS 1. A real gateway publishes the same shape → zero downstream change. Weather age > 3 h → seasonal means + `weather_stale=true`. Out-of-order/duplicate ts ignored.
 - **DB (init.sql):** hypertables `readings(ts, meter_id, kw)`, `weather_obs(ts, station_id, …)`, `scores(<ScoreFrame cols>, latency_ms)`; tables `alerts(id, meter_id, alert_type, started_at, ended_at, peak_z, excess_kwh, co2_kg, cost_usd, drivers jsonb, model_version, acknowledged)`.
-- **.env:** `MQTT_HOST/PORT/TLS`, `DB_URL`, `MLFLOW_TRACKING_URI`, `MODEL_URI=models:/smartbuilding-detector/Production`, `EMISSION_FACTOR_KG_PER_KWH=0.25`, `TARIFF_USD_PER_KWH=0.14`.
+- **.env:** `MQTT_HOST/PORT/TLS`, `DB_URL`, `MLFLOW_TRACKING_URI`, `MODEL_URI=models:/smartbuilding-detector@production`, `EMISSION_FACTOR_KG_PER_KWH=0.25`, `TARIFF_USD_PER_KWH=0.14`.
 
 ### Dashboard `building.json`
 Row 1 — actual vs expected with band fill; alert annotations by type · Row 2 — `z` with ±4 lines, CUSUM with h · Row 3 — stat tiles: open alerts, excess kWh / CO₂e / $ (24 h, 30 d) · Row 4 — alerts table (type, start, duration, observed vs expected, kWh, $, drivers as text) · Row 5 (health) — seconds since last score, latency p95, 24 h band coverage, 24 h MAE, alerts/7 d, model version — all SQL on `scores`. Grafana alert rules: open alert per type → annotation (+ optional email/Slack contact point from `.env`); `coverage_24h < 80 %` or `no score for 30 min` → `MODEL_HEALTH`.
@@ -165,7 +165,7 @@ schema rejects negative kw / missing offset · scorer: 10 msgs via in-proc queue
 
 ### Verification
 ```bash
-make up                                   # docker compose up -d --build ; Grafana at :3000, MLflow at :5000
+make up                                   # docker compose up -d --build ; Grafana at :3000, MLflow at :5001
 make replay                               # simulator from 2020-01-01 at 60× ; Jan–Mar quiet, SUSTAINED_LOW from April (COVID) — expected
 make replay START=2019-06-01 INJECT=sustained_offset    # SUSTAINED_HIGH with drivers; kWh/CO₂ tiles increase
 curl localhost:8001/health
@@ -181,7 +181,7 @@ uv run pytest -q -m "not integration" && uv run pytest -q -m integration
 
 ### Files
 ```
-src/smartbuilding/retrain.py     # retrain(window_months=24, as_of): pull readings+weather from DB → train the oldest 18 months, calibrate the next 6, evaluate the last 6 (as built; retrain.py) → run_eval on injected last 3 → gate → Staging→Production → POST /reload-model
+src/smartbuilding/retrain.py     # retrain(window_months=24, as_of): pull readings+weather from DB → train the oldest 18 months, calibrate the next 3, evaluate the last 3 (as built; retrain.py) → run_eval on injected last 3 → gate → Staging→Production → POST /reload-model
 scripts/retrain.py               # invoked by `make retrain` (host cron: 0 2 * * * cd … && make retrain)
 docs/runbook.md                  # alert → action (SUSTAINED_HIGH → HVAC/lighting schedules; SUSTAINED_LOW → equipment/meter; SPIKE → transient load; STUCK → metering);
                                  # acknowledge; rollback (`mlflow` stage transition + /reload-model); add a real meter (publish contract; cold start 4–6 weeks context-only); swap broker to IoT Core
@@ -201,7 +201,7 @@ uv run pytest -q
 ---
 
 ### Phase 3–4 outcome (2026-09-11)
-- Stack runs; full replay of 2020-01 → 2021-05 (real data, no injection) backfilled at 30,000×; scoring latency ~15 ms.
+- Stack runs; full replay of 2020-01 → 2021-05 (real data, no injection) backfilled at 30,000×; scoring latency ~9 ms median.
 - **Level-adjusted calibration**: the band factor is fit on the same level-adjusted residual the scorer uses.
   Found when the first retrain calibrated on the lockdown months and produced a band covering 100 % (detected
   nothing) — the gate refused it. Factor on 2018 dropped 2.12 → 1.59; rules re-tuned on 2018 → `k=1.5, h=12,

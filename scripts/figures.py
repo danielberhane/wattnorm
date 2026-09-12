@@ -114,21 +114,24 @@ def matched_fa_baseline(
     return best_k
 
 
-def replay_from_db(url: str) -> tuple[pd.DataFrame, dict]:
+def replay_from_db(url: str, meter_id: str) -> tuple[pd.DataFrame, dict]:
     """Alert events per month by direction, and band coverage per year, from the stack's database
     (the replay of 2020-01 → 2021-05 through the live scorer)."""
     with psycopg.connect(url) as conn:
         alerts = pd.read_sql(
             "SELECT to_char(started_at AT TIME ZONE 'America/New_York', 'YYYY-MM') AS mon, "
             "CASE WHEN alert_type LIKE '%%LOW' THEN 'low' ELSE 'high' END AS side, "
-            "count(*) AS n, sum(excess_kwh) AS kwh FROM alerts GROUP BY 1, 2 ORDER BY 1, 2",
+            "count(*) AS n, sum(excess_kwh) AS kwh FROM alerts WHERE meter_id = %(m)s "
+            "GROUP BY 1, 2 ORDER BY 1, 2",
             conn,
+            params={"m": meter_id},
         )
         cov = pd.read_sql(
             "SELECT extract(year FROM ts AT TIME ZONE 'America/New_York')::int AS yr, "
             "avg((actual_kw BETWEEN lower_kw AND upper_kw)::int) AS coverage, count(*) AS n "
-            "FROM scores WHERE actual_kw IS NOT NULL GROUP BY 1 ORDER BY 1",
+            "FROM scores WHERE actual_kw IS NOT NULL AND meter_id = %(m)s GROUP BY 1 ORDER BY 1",
             conn,
+            params={"m": meter_id},
         )
     table = alerts.pivot_table(index="mon", columns="side", values="n", fill_value=0).reset_index()
     for c in ("low", "high"):
@@ -433,7 +436,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     )
     save(fig, "fig6_offset_sweep")
 
-    # ------------------------------------------------------------ Fig 10 coverage drift 2018 → 2021
+    # ------------------------------------------------------------ Fig 8 coverage drift 2018 → 2021
     full = data[data.ts >= "2018-01-01"].reset_index(drop=True)
     scf, _ = det.score(full)
     okm = scf.actual_kw.notna()
@@ -464,7 +467,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     save(fig, "fig8_coverage_drift")
 
     # ------------------------------------------------------------ Fig 7 replay alerts
-    rep, n["replay_coverage_by_year"] = replay_from_db(Env().db_url)
+    rep, n["replay_coverage_by_year"] = replay_from_db(Env().db_url, cfg.site.meter_id)
     n["replay_alerts_by_month"] = rep.to_dict("records")
     n["replay_alerts_total"] = int(rep.low.sum() + rep.high.sum())
     fig, ax = plt.subplots(figsize=(9, 3.6))
@@ -484,7 +487,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     )
     save(fig, "fig7_replay_alerts")
 
-    # ------------------------------------------------------------ Fig 8 an alert up close
+    # ------------------------------------------------------------ Fig 9 an alert up close
     rp = load_dataset(cfg, "2019-12-31", "2020-01-04").reset_index(drop=True)
     inj = rp.copy()
     s0, s1 = 96 + 96 + 33, 96 + 96 + 33 + 43

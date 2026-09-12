@@ -22,6 +22,8 @@ def sink():
     s.execute("DELETE FROM scores WHERE meter_id = 'test-meter'")
     s.execute("DELETE FROM readings WHERE meter_id = 'test-meter'")
     yield s
+    for table in ("alerts", "scores", "readings"):
+        s.execute(f"DELETE FROM {table} WHERE meter_id = 'test-meter'")
     s.close()
 
 

@@ -38,4 +38,4 @@ Change the dashboard default time range back to `now-24h` for live use.
 
 ## Known limits
 - Demand units assumed kW; emission factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders — set real values in `.env` (used for the alerts table) **and** the dashboard text boxes (used for the tiles).
-- A frozen model degrades over a year (2019 coverage 0.81 with the 2018-calibrated model); retraining is part of the system, not optional.
+- A frozen model degrades over a year (2019 coverage 0.82 with the 2018-calibrated model); retraining is part of the system.
