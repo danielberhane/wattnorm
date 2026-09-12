@@ -69,7 +69,13 @@ The notebook's own correlation table pointed to a fourth issue: the five windowe
 
 ### 3.1 Demand
 
-Source: the electricity meter of **Clark Hall**, Cornell University (Ithaca, NY) — the physics building, home to the Laboratory of Atomic and Solid State Physics — exported from Cornell's Energy Management and Control System portal ([portal.emcs.cornell.edu](https://portal.emcs.cornell.edu)). 15-minute interval, `2015-01-01 05:00` → `2021-05-31 03:45` local time: **221,387 readings**, mean 235, standard deviation 26, range 118–391. The values are treated as kW, the portal's demand unit (§13). The building's location fixes the weather grid point used in §3.2.
+**Source and credit.** The demand series is the electricity meter of **Clark Hall** on Cornell University's Ithaca campus, obtained from Cornell's **Energy Management and Control System (EMCS) portal** ([portal.emcs.cornell.edu](https://portal.emcs.cornell.edu)), operated by the Energy and Sustainability department of Cornell Facilities and Campus Services. The EMCS collects electricity, steam and chilled-water consumption from field meters across campus every 15 minutes and publishes it through the portal, which also offers daily-to-yearly downloads in CSV and spreadsheet form; Cornell surfaces the same data to the campus community through its [Big Red Energy Scoreboard](https://sustainablecampus.cornell.edu/campus-initiatives/buildings-energy/building-energy-dashboard). Cornell publishes no formal citation format for the portal; this project credits it as:
+
+> Cornell University, Facilities and Campus Services — Energy and Sustainability. *Energy Management and Control System (EMCS) Portal*, Clark Hall electric demand, 15-minute interval, January 2015 – May 2021. https://portal.emcs.cornell.edu (accessed 2022 for the original study; re-used here). Data are the property of Cornell University and are used for research and educational purposes.
+
+**The building.** Clark Hall (1965) is the physics building on the Arts Quad: home to the Department of Physics, the Laboratory of Atomic and Solid State Physics and parts of the Cornell Center for Materials Research — laboratories, clean rooms, machine shops, lecture rooms and offices. That mix matters for what the meter shows (§3.1, Figure 1): a research building carries a large always-on load from experimental equipment, cryogenics and continuous ventilation, on top of which a daytime occupancy rise and an evening peak sit.
+
+**The series.** 15-minute interval, `2015-01-01 05:00` → `2021-05-31 03:45` local time: **221,387 readings**, mean 235, standard deviation 26, range 118–391. Values are average electric demand over each interval and are treated as kW throughout (§13 notes this should be confirmed against the portal's export). The building's location (42.44 N, −76.50 W) fixes the weather grid point used in §3.2.
 
 Profiling ran before any modelling, because half the notebook's problems were data handling:
 

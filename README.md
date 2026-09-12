@@ -52,9 +52,13 @@ make retrain    # trailing-window retrain with promotion gate  (AS_OF=YYYY-MM-DD
 Grafana http://localhost:3000 (view without login; admin/admin to edit) · MLflow http://localhost:5001 ·
 scorer http://localhost:8001/health
 
-Data files live in `data/raw/` (gitignored): `demand.csv` — 15-minute electric demand of Clark Hall,
-Cornell University, 2015–2021, exported from the Cornell EMCS portal — plus weather fetched from
-Open-Meteo with `make weather`. Design, phases and decisions: `docs/PLAN.md`.
+## Data
+
+`data/raw/demand.csv` (gitignored) is the 15-minute electric demand of **Clark Hall, Cornell University**
+(Ithaca, NY), January 2015 – May 2021, obtained from Cornell's Energy Management and Control System
+(EMCS) portal — Cornell University, Facilities and Campus Services, Energy and Sustainability,
+https://portal.emcs.cornell.edu. The data are Cornell's and are used here for research and educational
+purposes. Weather is the Open-Meteo ERA5 archive for the building's location (`make weather`). Design, phases and decisions: `docs/PLAN.md`.
 Operating guide for building managers: `docs/runbook.md`.
 
 ## Connecting a real meter
