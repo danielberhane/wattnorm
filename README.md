@@ -61,10 +61,3 @@ Operating guide for building managers: `docs/runbook.md`.
 Publish `{"meter_id": "...", "ts": "<ISO-8601 with offset>", "kw": <float>}` to
 `building/<meter_id>/demand` (QoS 1) and weather to `weather/<station_id>/obs`. Nothing downstream
 changes; the broker and database are `.env` settings.
-
-## Development notes
-
-Built by Daniel Berhane Araya with Claude Code as a pair-programming assistant. The problem framing,
-design goals, model choice, evaluation protocol and every recorded trade-off are in `docs/PLAN.md`;
-the code was developed test-first (100+ unit tests, one integration test) and independently reviewed
-before publication. The original 2022–2025 notebook prototype is preserved unchanged in `legacy/`.
