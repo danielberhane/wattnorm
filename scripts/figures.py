@@ -441,7 +441,8 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     ts_ok = scf.ts[okm].dt.tz_convert(tz)
     covm = inside.groupby(ts_ok.dt.strftime("%Y-%m")).mean()
     covm = covm[covm.index >= "2018-01"]  # drop the partial local-time month at the UTC boundary
-    n["coverage_by_year"] = inside.groupby(ts_ok.dt.year).mean().round(3).to_dict()
+    cov_y = inside.groupby(ts_ok.dt.year).mean().round(3)
+    n["coverage_by_year"] = cov_y[cov_y.index >= 2018].to_dict()  # drop the UTC-boundary sliver
     n["months_below_0_80"] = int((covm < 0.80).sum())
     fig, ax = plt.subplots(figsize=(9.5, 3.6))
     ax.plot(range(len(covm)), covm.values, color=BLUE, lw=2, marker="o", ms=3)

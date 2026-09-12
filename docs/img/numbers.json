@@ -1,0 +1,819 @@
+{
+ "model": "smartbuilding-detector/1",
+ "gaps_by_year": {
+  "2016": {
+   "n": 23,
+   "slots": 1146
+  },
+  "2017": {
+   "n": 16,
+   "slots": 476
+  },
+  "2018": {
+   "n": 17,
+   "slots": 58
+  },
+  "2019": {
+   "n": 106,
+   "slots": 110
+  }
+ },
+ "weekday_mean_kw": 241.7,
+ "weekend_mean_kw": 229.1,
+ "hour_min": 3,
+ "hour_max": 14,
+ "trough_below_peak_pct": 13.2,
+ "demand_clock": {
+  "first": "2015-01-01 05:00:00",
+  "last": "2021-05-31 03:45:00",
+  "rows_02xx_on_2019-03-10": 4,
+  "rows_01xx_on_2019-11-03": 4
+ },
+ "r_kw_cdd_train": 0.241,
+ "weather_overlap_hours": 35808,
+ "temp_r": 0.984,
+ "features": {
+  "sin_tod": {
+   "r": -0.307,
+   "gain_pct": 14.8
+  },
+  "cos_tod": {
+   "r": -0.571,
+   "gain_pct": 25.5
+  },
+  "sin_dow": {
+   "r": 0.256,
+   "gain_pct": 11.4
+  },
+  "cos_dow": {
+   "r": -0.086,
+   "gain_pct": 1.4
+  },
+  "sin_doy": {
+   "r": 0.082,
+   "gain_pct": 10.9
+  },
+  "cos_doy": {
+   "r": 0.08,
+   "gain_pct": 12.5
+  },
+  "is_holiday": {
+   "r": -0.079,
+   "gain_pct": 1.0
+  },
+  "is_weekend": {
+   "r": -0.299,
+   "gain_pct": 0.0
+  },
+  "temp_c": {
+   "r": 0.044,
+   "gain_pct": 4.7
+  },
+  "dewpoint_c": {
+   "r": -0.087,
+   "gain_pct": 4.9
+  },
+  "rh": {
+   "r": -0.325,
+   "gain_pct": 1.7
+  },
+  "wind_kph": {
+   "r": 0.106,
+   "gain_pct": 1.5
+  },
+  "gust_kph": {
+   "r": 0.205,
+   "gain_pct": 1.9
+  },
+  "pressure_hpa": {
+   "r": -0.003,
+   "gain_pct": 4.5
+  },
+  "precip_mm": {
+   "r": 0.025,
+   "gain_pct": 0.3
+  },
+  "hdd": {
+   "r": 0.022,
+   "gain_pct": 2.6
+  },
+  "cdd": {
+   "r": 0.241,
+   "gain_pct": 0.5
+  }
+ },
+ "raw_half_width_kw_p10_p50_p90": [
+  5.9,
+  8.6,
+  12.5
+ ],
+ "cal_mean_kw": 237.1,
+ "cal_mae": 9.8,
+ "cal_pinball_q50": 4.9,
+ "cal_raw_coverage": 0.585,
+ "calibration_factor": 1.657,
+ "sigma_kw_median": 8.7,
+ "z2019_raw_mean": -0.54,
+ "z2019_raw_lag1": 0.78,
+ "z2019_raw_monthly": [
+  -1.71,
+  -1.8,
+  -0.77,
+  -0.68,
+  -0.11,
+  -0.49,
+  0.19,
+  -1.15,
+  -0.74,
+  -0.18,
+  0.61,
+  0.26
+ ],
+ "z2019_adj_monthly": [
+  -0.21,
+  0.32,
+  0.31,
+  0.02,
+  0.17,
+  0.07,
+  0.08,
+  -0.21,
+  0.11,
+  0.25,
+  -0.08,
+  0.09
+ ],
+ "test_mae": 11.04,
+ "test_pinball_q50": 5.52,
+ "tuning_grid": [
+  {
+   "k": 1.0,
+   "h": 12,
+   "spike": 4,
+   "fa": 2.244,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.0,
+   "h": 12,
+   "spike": 5,
+   "fa": 2.148,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.0,
+   "h": 16,
+   "spike": 4,
+   "fa": 2.11,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.0,
+   "h": 16,
+   "spike": 5,
+   "fa": 1.937,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.5,
+   "h": 12,
+   "spike": 4,
+   "fa": 1.285,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.5,
+   "h": 12,
+   "spike": 5,
+   "fa": 1.132,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.5,
+   "h": 16,
+   "spike": 4,
+   "fa": 1.266,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 1.5,
+   "h": 16,
+   "spike": 5,
+   "fa": 1.074,
+   "recall_10pct": 0.9
+  },
+  {
+   "k": 2.0,
+   "h": 12,
+   "spike": 4,
+   "fa": 1.016,
+   "recall_10pct": 0.75
+  },
+  {
+   "k": 2.0,
+   "h": 12,
+   "spike": 5,
+   "fa": 0.767,
+   "recall_10pct": 0.7
+  },
+  {
+   "k": 2.0,
+   "h": 16,
+   "spike": 4,
+   "fa": 0.978,
+   "recall_10pct": 0.7
+  },
+  {
+   "k": 2.0,
+   "h": 16,
+   "spike": 5,
+   "fa": 0.69,
+   "recall_10pct": 0.6
+  }
+ ],
+ "baseline_matched_k": 1.5,
+ "eval_2019": {
+  "seeds_0_4": {
+   "detector": {
+    "spike": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 2.298,
+     "coverage": 0.783,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.8
+    },
+    "sustained_offset": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 2.29,
+     "coverage": 0.783,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.4
+    },
+    "dropout": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 2.298,
+     "coverage": 0.783,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.8
+    },
+    "slow_drift": {
+     "precision": 0.029,
+     "recall": 0.933,
+     "f1": 0.056,
+     "ttd_median_min": 1695.0,
+     "fa_per_week": 1.818,
+     "coverage": 0.783,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 94.8
+    },
+    "schedule_shift": {
+     "precision": 0.022,
+     "recall": 0.867,
+     "f1": 0.043,
+     "ttd_median_min": 72.0,
+     "fa_per_week": 2.259,
+     "coverage": 0.783,
+     "tp": 2.6,
+     "fn": 0.4,
+     "fp": 117.8
+    },
+    "stuck_meter": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 105.0,
+     "fa_per_week": 2.298,
+     "coverage": 0.783,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.8
+    },
+    "clean": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "ttd_median_min": NaN,
+     "fa_per_week": 1.573,
+     "coverage": 0.821,
+     "tp": 0.0,
+     "fn": 0.0,
+     "fp": 82.0
+    }
+   },
+   "baseline": {
+    "spike": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "sustained_offset": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 15.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "dropout": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "slow_drift": {
+     "precision": 0.035,
+     "recall": 0.8,
+     "f1": 0.067,
+     "ttd_median_min": 7704.0,
+     "fa_per_week": 1.281,
+     "coverage": 0.833,
+     "tp": 2.4,
+     "fn": 0.6,
+     "fp": 66.8
+    },
+    "schedule_shift": {
+     "precision": 0.029,
+     "recall": 0.733,
+     "f1": 0.056,
+     "ttd_median_min": 303.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 2.2,
+     "fn": 0.8,
+     "fp": 72.6
+    },
+    "stuck_meter": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 105.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "clean": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "ttd_median_min": NaN,
+     "fa_per_week": 0.71,
+     "coverage": 0.877,
+     "tp": 0.0,
+     "fn": 0.0,
+     "fp": 37.0
+    }
+   },
+   "baseline_matched_fa": {
+    "spike": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "sustained_offset": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 15.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "dropout": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "slow_drift": {
+     "precision": 0.035,
+     "recall": 0.8,
+     "f1": 0.067,
+     "ttd_median_min": 7704.0,
+     "fa_per_week": 1.281,
+     "coverage": 0.833,
+     "tp": 2.4,
+     "fn": 0.6,
+     "fp": 66.8
+    },
+    "schedule_shift": {
+     "precision": 0.029,
+     "recall": 0.733,
+     "f1": 0.056,
+     "ttd_median_min": 303.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 2.2,
+     "fn": 0.8,
+     "fp": 72.6
+    },
+    "stuck_meter": {
+     "precision": 0.04,
+     "recall": 1.0,
+     "f1": 0.077,
+     "ttd_median_min": 105.0,
+     "fa_per_week": 1.392,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 72.6
+    },
+    "clean": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "ttd_median_min": NaN,
+     "fa_per_week": 0.71,
+     "coverage": 0.877,
+     "tp": 0.0,
+     "fn": 0.0,
+     "fp": 37.0
+    }
+   }
+  },
+  "seeds_5_9": {
+   "detector": {
+    "spike": {
+     "precision": 0.023,
+     "recall": 0.933,
+     "f1": 0.045,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 2.286,
+     "coverage": 0.785,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 119.2
+    },
+    "sustained_offset": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 6.0,
+     "fa_per_week": 2.282,
+     "coverage": 0.785,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.0
+    },
+    "dropout": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 2.282,
+     "coverage": 0.785,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.0
+    },
+    "slow_drift": {
+     "precision": 0.03,
+     "recall": 1.0,
+     "f1": 0.058,
+     "ttd_median_min": 3939.0,
+     "fa_per_week": 1.864,
+     "coverage": 0.785,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 97.2
+    },
+    "schedule_shift": {
+     "precision": 0.022,
+     "recall": 0.867,
+     "f1": 0.042,
+     "ttd_median_min": 241.5,
+     "fa_per_week": 2.248,
+     "coverage": 0.785,
+     "tp": 2.6,
+     "fn": 0.4,
+     "fp": 117.2
+    },
+    "stuck_meter": {
+     "precision": 0.025,
+     "recall": 1.0,
+     "f1": 0.048,
+     "ttd_median_min": 105.0,
+     "fa_per_week": 2.282,
+     "coverage": 0.785,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 119.0
+    },
+    "clean": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "ttd_median_min": NaN,
+     "fa_per_week": 1.573,
+     "coverage": 0.821,
+     "tp": 0.0,
+     "fn": 0.0,
+     "fp": 82.0
+    }
+   },
+   "baseline": {
+    "spike": {
+     "precision": 0.034,
+     "recall": 0.933,
+     "f1": 0.066,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.507,
+     "coverage": 0.833,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 78.6
+    },
+    "sustained_offset": {
+     "precision": 0.034,
+     "recall": 0.933,
+     "f1": 0.066,
+     "ttd_median_min": 60.0,
+     "fa_per_week": 1.507,
+     "coverage": 0.833,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 78.6
+    },
+    "dropout": {
+     "precision": 0.037,
+     "recall": 1.0,
+     "f1": 0.071,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.5,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 78.2
+    },
+    "slow_drift": {
+     "precision": 0.039,
+     "recall": 0.933,
+     "f1": 0.074,
+     "ttd_median_min": 7792.5,
+     "fa_per_week": 1.35,
+     "coverage": 0.833,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 70.4
+    },
+    "schedule_shift": {
+     "precision": 0.022,
+     "recall": 0.6,
+     "f1": 0.043,
+     "ttd_median_min": 369.0,
+     "fa_per_week": 1.523,
+     "coverage": 0.833,
+     "tp": 1.8,
+     "fn": 1.2,
+     "fp": 79.4
+    },
+    "stuck_meter": {
+     "precision": 0.037,
+     "recall": 1.0,
+     "f1": 0.071,
+     "ttd_median_min": 105.0,
+     "fa_per_week": 1.504,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 78.4
+    },
+    "clean": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "ttd_median_min": NaN,
+     "fa_per_week": 0.71,
+     "coverage": 0.877,
+     "tp": 0.0,
+     "fn": 0.0,
+     "fp": 37.0
+    }
+   },
+   "baseline_matched_fa": {
+    "spike": {
+     "precision": 0.034,
+     "recall": 0.933,
+     "f1": 0.066,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.507,
+     "coverage": 0.833,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 78.6
+    },
+    "sustained_offset": {
+     "precision": 0.034,
+     "recall": 0.933,
+     "f1": 0.066,
+     "ttd_median_min": 60.0,
+     "fa_per_week": 1.507,
+     "coverage": 0.833,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 78.6
+    },
+    "dropout": {
+     "precision": 0.037,
+     "recall": 1.0,
+     "f1": 0.071,
+     "ttd_median_min": 0.0,
+     "fa_per_week": 1.5,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 78.2
+    },
+    "slow_drift": {
+     "precision": 0.039,
+     "recall": 0.933,
+     "f1": 0.074,
+     "ttd_median_min": 7792.5,
+     "fa_per_week": 1.35,
+     "coverage": 0.833,
+     "tp": 2.8,
+     "fn": 0.2,
+     "fp": 70.4
+    },
+    "schedule_shift": {
+     "precision": 0.022,
+     "recall": 0.6,
+     "f1": 0.043,
+     "ttd_median_min": 369.0,
+     "fa_per_week": 1.523,
+     "coverage": 0.833,
+     "tp": 1.8,
+     "fn": 1.2,
+     "fp": 79.4
+    },
+    "stuck_meter": {
+     "precision": 0.037,
+     "recall": 1.0,
+     "f1": 0.071,
+     "ttd_median_min": 105.0,
+     "fa_per_week": 1.504,
+     "coverage": 0.833,
+     "tp": 3.0,
+     "fn": 0.0,
+     "fp": 78.4
+    },
+    "clean": {
+     "precision": 0.0,
+     "recall": 0.0,
+     "f1": 0.0,
+     "ttd_median_min": NaN,
+     "fa_per_week": 0.71,
+     "coverage": 0.877,
+     "tp": 0.0,
+     "fn": 0.0,
+     "fp": 37.0
+    }
+   }
+  }
+ },
+ "offset_sweep_6h": [
+  {
+   "mag": 0.0,
+   "recall": 0.05,
+   "ttd": 0.0
+  },
+  {
+   "mag": 0.05,
+   "recall": 0.45,
+   "ttd": 135.0
+  },
+  {
+   "mag": 0.08,
+   "recall": 0.75,
+   "ttd": 120.0
+  },
+  {
+   "mag": 0.1,
+   "recall": 0.65,
+   "ttd": 75.0
+  },
+  {
+   "mag": 0.12,
+   "recall": 0.85,
+   "ttd": 90.0
+  },
+  {
+   "mag": 0.15,
+   "recall": 0.9,
+   "ttd": 0.0
+  },
+  {
+   "mag": 0.2,
+   "recall": 1.0,
+   "ttd": 0.0
+  },
+  {
+   "mag": 0.3,
+   "recall": 0.95,
+   "ttd": 0.0
+  },
+  {
+   "mag": 0.4,
+   "recall": 1.0,
+   "ttd": 0.0
+  }
+ ],
+ "coverage_by_year": {
+  "2017": 0.45,
+  "2018": 0.9,
+  "2019": 0.822,
+  "2020": 0.684,
+  "2021": 0.754
+ },
+ "months_below_0_80": 18,
+ "replay_coverage_by_year": {
+  "2019": [
+   0.7,
+   20
+  ],
+  "2020": [
+   0.67,
+   10708
+  ]
+ },
+ "replay_alerts_by_month": [
+  {
+   "mon": "2020-01",
+   "high": 7.0,
+   "low": 3.0,
+   "kwh": 127.0
+  },
+  {
+   "mon": "2020-02",
+   "high": 6.0,
+   "low": 0.0,
+   "kwh": 335.0
+  },
+  {
+   "mon": "2020-03",
+   "high": 2.0,
+   "low": 8.0,
+   "kwh": 64.0
+  },
+  {
+   "mon": "2020-04",
+   "high": 8.0,
+   "low": 14.0,
+   "kwh": 103.0
+  },
+  {
+   "mon": "2020-05",
+   "high": 5.0,
+   "low": 1.0,
+   "kwh": 95.0
+  }
+ ],
+ "replay_alerts_total": 54,
+ "fig9_alert_runs": [
+  [
+   "2020-01-02 03:15:00-05:00",
+   "2020-01-02 15:45:00-05:00"
+  ]
+ ]
+}
