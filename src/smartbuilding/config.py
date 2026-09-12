@@ -20,6 +20,7 @@ class Site(BaseModel):
     lat: float
     lon: float
     tz: str
+    demand_tz: str = "UTC"  # clock of the demand export; the EMCS portal exports UTC
     freq: str = "15min"
 
 

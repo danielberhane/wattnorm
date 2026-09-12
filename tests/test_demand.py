@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from smartbuilding.data.demand import complete_grid, gap_report, load_demand, localize
+from smartbuilding.data.demand import complete_grid, gap_report, load_demand
 
 TZ = "America/New_York"
 
@@ -14,12 +14,37 @@ def write_csv(tmp_path: Path, rows: list[tuple[str, float]]) -> Path:
     return p
 
 
-def test_load_demand_returns_ts_local_and_kw(tmp_path):
+def test_load_demand_returns_utc_ts_and_kw(tmp_path):
     p = write_csv(tmp_path, [("2019-01-01 05:00:00", 210.9), ("2019-01-01 05:15:00", 228.2)])
     df = load_demand(p)
-    assert list(df.columns) == ["ts_local", "kw"]
-    assert pd.api.types.is_datetime64_any_dtype(df["ts_local"])
+    assert list(df.columns) == ["ts", "kw"]
+    assert str(df["ts"].dt.tz) == "UTC"
+    assert df["ts"].iloc[0] == pd.Timestamp("2019-01-01 05:00:00", tz="UTC")
     assert df["kw"].tolist() == [210.9, 228.2]
+
+
+def test_load_demand_keeps_dst_hours_when_export_is_utc(tmp_path):
+    # The EMCS export clock is UTC: 02:xx on the US spring-forward day and a single 01:xx on the
+    # fall-back day are ordinary readings and must survive.
+    p = write_csv(
+        tmp_path,
+        [("2019-03-10 02:15:00", 1.0), ("2019-11-03 01:15:00", 2.0), ("2019-07-01 12:00:00", 3.0)],
+    )
+    df = load_demand(p)  # default tz="UTC"
+    assert df["kw"].tolist() == [1.0, 3.0, 2.0]
+    assert df["ts"].iloc[0] == pd.Timestamp("2019-03-10 02:15:00", tz="UTC")
+
+
+def test_load_demand_local_export_drops_ambiguous_and_nonexistent(tmp_path):
+    # A genuinely local export cannot say which fall-back hour a reading belongs to, and has no
+    # spring-forward 02:xx hour at all: both are dropped rather than guessed.
+    p = write_csv(
+        tmp_path,
+        [("2019-03-10 02:15:00", 1.0), ("2019-11-03 01:15:00", 2.0), ("2019-07-01 12:00:00", 3.0)],
+    )
+    df = load_demand(p, tz=TZ)
+    assert df["kw"].tolist() == [3.0]
+    assert df["ts"].iloc[0] == pd.Timestamp("2019-07-01 16:00:00", tz="UTC")  # EDT = UTC-4
 
 
 def test_load_demand_drops_duplicate_timestamps_keeping_last(tmp_path):
@@ -33,38 +58,6 @@ def test_load_demand_rejects_non_positive_demand(tmp_path):
     p = write_csv(tmp_path, [("2019-01-01 05:00:00", 0.0)])
     with pytest.raises(ValueError, match="kw"):
         load_demand(p)
-
-
-def test_localize_converts_to_utc():
-    df = pd.DataFrame({"ts_local": pd.to_datetime(["2019-07-01 12:00:00"]), "kw": [1.0]})
-    out = localize(df, TZ)
-    assert str(out["ts"].dt.tz) == "UTC"
-    assert out["ts"].iloc[0] == pd.Timestamp("2019-07-01 16:00:00", tz="UTC")  # EDT = UTC-4
-    assert "ts_local" not in out.columns
-
-
-def test_localize_drops_ambiguous_fall_back_hour():
-    # 2019-11-03 01:30 local occurs twice (EDT and EST); we cannot tell which → drop it.
-    df = pd.DataFrame(
-        {
-            "ts_local": pd.to_datetime(["2019-11-03 00:45:00", "2019-11-03 01:30:00"]),
-            "kw": [1.0, 2.0],
-        }
-    )
-    out = localize(df, TZ)
-    assert out["kw"].tolist() == [1.0]
-
-
-def test_localize_drops_nonexistent_spring_forward_hour():
-    # 2019-03-10 02:30 local does not exist (clocks jump 02:00 -> 03:00); drop it.
-    df = pd.DataFrame(
-        {
-            "ts_local": pd.to_datetime(["2019-03-10 01:45:00", "2019-03-10 02:30:00"]),
-            "kw": [1.0, 2.0],
-        }
-    )
-    out = localize(df, TZ)
-    assert out["kw"].tolist() == [1.0]
 
 
 def test_complete_grid_fills_missing_slots_with_nan():

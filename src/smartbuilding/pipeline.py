@@ -7,7 +7,7 @@ import pandas as pd
 
 from smartbuilding.config import Config, ModelParams, Rules
 from smartbuilding.data.dataset import build_dataset
-from smartbuilding.data.demand import load_demand, localize
+from smartbuilding.data.demand import load_demand
 from smartbuilding.data.weather import load_weather
 from smartbuilding.features import SeasonalMeanImputer, build_features
 from smartbuilding.model import Calibrator, Detector, QuantileLGBM, level_alpha, track_level
@@ -15,7 +15,7 @@ from smartbuilding.model import Calibrator, Detector, QuantileLGBM, level_alpha,
 
 def load_dataset(cfg: Config, start: str, end: str) -> pd.DataFrame:
     """ts, kw, weather on the complete 15-min grid for [start, end] (UTC dates)."""
-    demand = localize(load_demand(cfg.paths.demand_csv), cfg.site.tz)
+    demand = load_demand(cfg.paths.demand_csv, cfg.site.demand_tz)
     weather = load_weather(
         cfg.paths.weather_parquet,
         cfg.paths.weather_metric_csv,

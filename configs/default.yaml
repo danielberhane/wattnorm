@@ -10,7 +10,8 @@ site:
   station_id: ithaca
   lat: 42.44
   lon: -76.50
-  tz: America/New_York
+  tz: America/New_York  # calendar features are computed in this zone
+  demand_tz: UTC        # clock of the demand export (EMCS portal exports UTC)
   freq: 15min
 
 splits:
