@@ -36,6 +36,20 @@ and tariff (both editable on the dashboard — the defaults are placeholders).*
 - **Operations** — MLflow registry with a promotion gate, scorer hot-swap, nightly retrain on a
   trailing window, one Grafana dashboard whose health row is plain SQL on the `scores` table.
 
+## Terms used above
+
+- **Quantile regression** — a model that predicts a chosen percentile of demand (here the 5th, 50th and 95th) instead of only the average, so it gives a range as well as a central estimate.
+- **Band / coverage** — the range between the 5th and 95th percentile predictions, scaled so that 90 % of ordinary readings fall inside it; coverage is the share that actually does.
+- **Residual and σ** — the gap between the metered and expected demand, expressed in units of the band's half-width so that "3σ" means the same thing in summer and winter.
+- **Level tracker** — a slow-moving estimate of how far the building's baseline has shifted from the model's expectation, so a permanent change in occupancy does not look like a permanent anomaly.
+- **CUSUM** — a running sum of the residual that grows while demand stays on one side of expectation and resets otherwise; it catches small but persistent deviations that no single reading would.
+- **SHAP drivers** — the features (hour, temperature, weekday …) that contributed most to the expected value for that reading, used to explain each alert.
+- **Seasonal-naive baseline** — the simplest competitor: expected demand equals the reading one week earlier at the same time.
+- **Recall / false alarms per week** — the share of injected anomalies the detector catches, and how many alerts it raises on data with no anomaly injected.
+- **MQTT** — a lightweight publish/subscribe messaging protocol widely used by meters and IoT gateways.
+- **TimescaleDB** — PostgreSQL with time-series extensions, so Grafana queries it with plain SQL.
+- **MLflow registry / hot-swap** — MLflow stores each trained model with its metrics under a version and an alias (`@staging`, `@production`); the scorer can load a newly promoted version without restarting.
+
 ## Run it
 
 ```
