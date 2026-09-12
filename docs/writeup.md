@@ -69,7 +69,7 @@ The notebook's own correlation table pointed to a fourth issue: the five windowe
 
 ### 3.1 Demand
 
-Source: a single building's electricity meter, 15-minute interval, `2015-01-01 05:00` → `2021-05-31 03:45` local time. **221,387 readings**, mean 235, standard deviation 26, range 118–391 (units are assumed to be kW; see §13).
+Source: the electricity meter of **Clark Hall**, Cornell University (Ithaca, NY) — the physics building, home to the Laboratory of Atomic and Solid State Physics — exported from Cornell's Energy Management and Control System portal ([portal.emcs.cornell.edu](https://portal.emcs.cornell.edu)). 15-minute interval, `2015-01-01 05:00` → `2021-05-31 03:45` local time: **221,387 readings**, mean 235, standard deviation 26, range 118–391. The values are treated as kW, the portal's demand unit (§13). The building's location fixes the weather grid point used in §3.2.
 
 Profiling ran before any modelling, because half the notebook's problems were data handling:
 
@@ -89,7 +89,7 @@ Over the modelling years gap *count* rose and gap *length* fell (2016: 24 gaps, 
 
 ![Figure 1 — daily demand profile](img/fig1_daily_profile.png)
 
-*Figure 1. Mean demand by time of day, 2016–2017. This is not an office profile — an office peaks mid-afternoon and empties after 18:00. An evening peak with a shallow morning trough is closer to residential or mixed-use behaviour. The model does not need to be told which; the features let it learn the shape.*
+*Figure 1. Mean demand by time of day, 2016–2017. This is not an office profile — an office peaks mid-afternoon and empties after 18:00. A research laboratory runs a large 24-hour base load (equipment, continuous ventilation) with a modest daytime rise and an evening peak, which is what the curve shows: the trough is only 13 % below the peak. The model does not need to be told any of this; the features let it learn the shape.*
 
 ### 3.2 Weather
 
@@ -199,7 +199,7 @@ Linear correlations with demand on the training set and LightGBM gain importance
 
 Three observations. Time of day dominates, as expected. The day-of-year pair carries 24 % of the gain while its linear correlation is near zero — seasonality is real but non-monotonic, which is precisely the case where trees beat a linear model and where cyclic encoding earns its place. And `is_weekend` has zero gain despite a −0.29 correlation: the model gets the same information from `sin_dow`, so the flag is redundant (harmless, and kept for readability of SHAP explanations).
 
-Weather matters less than intuition suggests for this building: temperature, dew point and pressure together take ~15 % of the gain. That is consistent with an evening-peaking load driven by occupancy rather than a chiller-dominated office.
+Weather matters less than intuition suggests for this building: temperature, dew point and pressure together take ~15 % of the gain. That is consistent with a laboratory whose load is dominated by equipment and always-on ventilation rather than by weather-driven cooling.
 
 ## 5. Model selection
 
@@ -510,11 +510,11 @@ Before publication the repository was reviewed against the plan by a separate, A
 
 ## 13. Limits, open questions, next steps
 
-- **Units and factors.** `Demand` is assumed to be kW. The CO₂e factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders. For upstate New York on NYISO the factor is likely 0.1–0.2 kg/kWh and varies by hour with the generation mix; an hourly marginal factor would change the sustainability figures materially and is a straightforward join.
+- **Units and factors.** Demand is treated as kW, the EMCS portal's unit for building electric demand; this should be confirmed against the portal's export before the kWh figures are quoted. The CO₂e factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders. Cornell's Ithaca campus draws on a combined-heat-and-power plant, hydro and the NYISO grid, so the real factor is well below 0.25 and varies by hour; an hourly factor from the campus energy office would change the sustainability figures materially and is a straightforward join.
 - **A frozen model degrades within a year** (coverage 0.90 → 0.81). Retraining is a component, not an option — and the gate must be shown to pass on a healthy candidate, which has not happened yet because the only windows tried straddle the lockdown.
 - **Small offsets.** Below roughly 12 % the context band misses a growing share of them (§9.2). The documented extension is a second, lag-based model behind the same `Detector` interface whose residual feeds only the spike rule (never CUSUM, to avoid the new-normal problem).
 - **Synthetic evaluation measures detectability of assumed shapes.** The building's real anomalies may look like none of the six. The 2020–21 replay is the only real-world check and it is unlabelled; a period of manager feedback ("this alert was real / was not") would turn the false-alarm rate into a measured precision.
-- **One meter, one weather station, one holiday calendar.** A portfolio would need per-building models or a global model with building identity, an academic calendar if the building is on a campus (the evening peak hints at residential use), and a cold-start policy (4–6 weeks of readings across a temperature range before the band is trustworthy).
+- **One meter, one weather station, one holiday calendar.** The model uses US federal holidays; Clark Hall follows Cornell's academic calendar (winter break, spring break, summer session), which is the obvious next feature and would likely explain some of the January and August residual in Figure 3. A portfolio would need per-building models or a global model with building identity, and a cold-start policy (4–6 weeks of readings across a temperature range before the band is trustworthy).
 - **Within-hour shape anomalies** (short cycling) are invisible to a point model; the autoencoder is the right tool there and remains the candidate second signal.
 - **Live weather** needs the Open-Meteo current/forecast endpoint wired in; replay uses the archive.
 
