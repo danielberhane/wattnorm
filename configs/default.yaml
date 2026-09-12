@@ -30,10 +30,10 @@ model:
 rules:
   spike_z: 5.0  # single-slot spike threshold in σ (tuned on 2018 with level-adjusted calibration)
   cusum_k: 1.5  # allowance: residual wander below ~1.5σ is not an anomaly (tuned on 2018)
-  cusum_h: 12.0  # with k=1.5 and z winsorised at 5: a sustained +3σ trips in 8 slots (2 h)
+  cusum_h: 12.0  # with k=1.5 and z clipped at 5: a sustained +3σ trips in 9 slots (~2 h)
   stuck_slots: 8
   close_after_in_band_slots: 8
   weather_stale_hours: 3
-  level_halflife_days: 3  # EWMA of z tracks the building's recent level; deviations are judged against it
+  level_halflife_days: 3  # half-life of the robust EWMA of the kW residual (the building's recent level)
 
 # emission factor / tariff live in .env (alerts table) and the dashboard text boxes (tiles)
