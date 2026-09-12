@@ -8,7 +8,7 @@
 
 **Decisions:** detector = **A, residual-based** (one LightGBM quantile model, context-only); local **Docker Compose**; **MLflow** tracking + registry; **Open-Meteo** weather; strict temporal splits — train 2016–2017 · calibrate 2018 · test 2019 (full year, injected anomalies) · replay 2020-01 → 2021-05 (3 normal months then the COVID drop). The v4 autoencoder is an optional later extension, not the core.
 
-**Data:** demand 2015-01 → 2021-05, 15-min, 221k rows, mean 235 (kW assumed), 1.53 % missing in 200 gaps; 2015 ≈ 9 % higher, 2020 ≈ 10 % lower. Metric weather CSV 2016-01 → 2020-02 (`Pressure==0` nulls, gust outlier); imperial CSV 2015–2019.
+**Data:** demand 2015-01 → 2021-05, 15-min, 221k rows, mean 235 kW, 1.53 % missing in 200 gaps; 2015 ≈ 9 % higher, 2020 ≈ 10 % lower. Metric weather CSV 2016-01 → 2020-02 (`Pressure==0` nulls, gust outlier); imperial CSV 2015–2019.
 
 ## Design goals (priority order) and how the design meets them
 
@@ -228,7 +228,7 @@ uv run pytest -q
 `make setup lint test train eval up down replay [START= INJECT=] retrain [AS_OF=]`
 
 ## Risks / open questions
-1. **Demand units** assumed kW — affects kWh/CO₂/$; confirm.
+1. **Demand units** — resolved: kW (portal documents building electricity in units of power, kW/MW).
 2. **Emission factor / tariff** placeholders → NYISO Zone C values.
 3. **Open-Meteo archive quality for Ithaca** unverified; Phase 1 CLI prints agreement with the CSV on the overlap. CSV fallback ends 2020-02, so replay beyond that depends on Open-Meteo.
 4. **Context-only band is wider than a lag model's** → spikes below ~×1.3 may be missed; add the lag model only if 2019 eval shows it matters.

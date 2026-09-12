@@ -73,7 +73,7 @@ The notebook's own correlation table pointed to a fourth issue: the five windowe
 
 **The building.** Clark Hall (1965) is the physics building on the Arts Quad, home to the Department of Physics, the Laboratory of Atomic and Solid State Physics and parts of the Cornell Center for Materials Research: laboratories, clean rooms, machine shops, lecture rooms and offices. A research building carries a large always-on load from experimental equipment, cryogenics and continuous ventilation, on top of which a daytime occupancy rise and an evening peak sit (Figure 1).
 
-**The series.** 15-minute interval, `2015-01-01 05:00` to `2021-05-31 03:45` local time: **221,387 readings**, mean 235, standard deviation 26, range 118–391. Values are average electric demand over each interval and are treated as kW throughout (§13). The building's location (42.44 N, −76.50 W) fixes the weather grid point used in §3.2.
+**The series.** 15-minute interval, `2015-01-01 05:00` to `2021-05-31 03:45` local time: **221,387 readings**, mean 235, standard deviation 26, range 118–391. Values are electric demand in **kilowatts (kW)**: the EMCS portal documents its electricity series in units of power (kW for buildings, MW for the campus total) and exposes per-building `Elec.TotalDemand` points at 15-minute resolution, so a reading of 235 is a 235 kW draw over that slot and the energy in a slot is `kW × 0.25 h`. The building's location (42.44 N, −76.50 W) fixes the weather grid point used in §3.2.
 
 **Profiling** preceded any modelling, since half the prototype's problems were data handling:
 
@@ -516,7 +516,7 @@ Before publication the repository was reviewed against the plan by a separate, A
 
 ## 13. Limits and next steps
 
-- **Units and factors.** Demand is treated as kW, the EMCS portal's unit for building electric demand; this should be confirmed against the portal's export before the kWh figures are quoted. The CO₂e factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders. Cornell's Ithaca campus draws on a combined-heat-and-power plant, hydro and the NYISO grid, so the real factor is well below 0.25 and varies by hour; an hourly factor from the campus energy office would change the sustainability figures materially and is a straightforward join.
+- **Emission factor and tariff.** The CO₂e factor (0.25 kg/kWh) and tariff ($0.14/kWh) are placeholders. Cornell's Ithaca campus draws on a combined-heat-and-power plant, hydro and the NYISO grid, so the real factor is well below 0.25 and varies by hour; an hourly factor from the campus energy office would change the sustainability figures materially and is a straightforward join.
 - **A frozen model degrades within a year** (coverage 0.90 → 0.81 → 0.68). Retraining is a component, not an option — and the gate must be shown to pass on a healthy candidate, which has not yet happened because the only windows tried straddle the lockdown.
 - **Small offsets.** Below roughly 12 % the context band misses a growing share of them (§9.2). The documented extension is a second, lag-based model behind the same `Detector` interface whose residual feeds only the spike rule (never CUSUM, to avoid the new-normal problem).
 - **Synthetic evaluation measures the detectability of assumed shapes.** The building's real anomalies may look like none of the six. The 2020–21 replay is the only real-world check and it is unlabelled; a period of manager feedback ("this alert was real / was not") would turn the false-alarm rate into a measured precision.
