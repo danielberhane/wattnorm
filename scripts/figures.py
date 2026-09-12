@@ -38,14 +38,16 @@ BLUE, ORANGE, AQUA, RED, GRAY, INK, GRID = (
 )  # fmt: skip
 plt.rcParams.update(
     {
-        "font.family": "Helvetica Neue", "font.size": 11, "axes.edgecolor": GRAY,
+        "font.family": "Helvetica Neue", "font.size": 10, "axes.edgecolor": GRAY,
         "axes.labelcolor": "#374151", "xtick.color": "#374151", "ytick.color": "#374151",
         "axes.spines.top": False, "axes.spines.right": False, "axes.grid": True,
-        "grid.color": GRID, "grid.linewidth": 0.8, "axes.titleweight": "bold",
-        "axes.titlesize": 13, "axes.titlecolor": INK, "legend.frameon": False,
+        "grid.color": "#EEF0F3", "grid.linewidth": 0.7, "axes.axisbelow": True,
+        "axes.titleweight": "bold",
+        "axes.titlesize": 12, "axes.titlecolor": INK, "legend.frameon": False,
     }
 )  # fmt: skip
 OUT = "docs/img"
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 # Threshold grid on 2018 as recorded in docs/PLAN.md (re-run: evaluate.py --split calibrate)
 TUNING_GRID = [
@@ -65,7 +67,7 @@ REPLAY_ALERTS = {
 
 def save(fig, name: str) -> None:
     fig.tight_layout()
-    fig.savefig(f"{OUT}/{name}.png", dpi=200, facecolor="white")
+    fig.savefig(f"{OUT}/{name}.png", dpi=150, facecolor="white")
     plt.close(fig)
     print("saved", name)
 
@@ -109,7 +111,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     n["hour_min"], n["hour_max"] = int(byh.idxmin()), int(byh.idxmax())
     wk = d.kw[loc.dt.dayofweek < 5].groupby(loc.dt.hour[loc.dt.dayofweek < 5]).mean()
     we = d.kw[loc.dt.dayofweek >= 5].groupby(loc.dt.hour[loc.dt.dayofweek >= 5]).mean()
-    fig, ax = plt.subplots(figsize=(9, 4))
+    fig, ax = plt.subplots(figsize=(8, 3.4))
     ax.plot(wk.index, wk.values, color=BLUE, lw=2, marker="o", ms=3)
     ax.plot(we.index, we.values, color=ORANGE, lw=2, marker="o", ms=3)
     ax.text(23.4, wk.values[-1], "Weekday", color=BLUE, va="center")
@@ -130,7 +132,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     j = om[["temp_c"]].join(st[["temp_c"]], how="inner", lsuffix="_om", rsuffix="_st").dropna()
     r = float(j.temp_c_st.corr(j.temp_c_om))
     n["weather_overlap_hours"], n["temp_r"] = int(len(j)), round(r, 3)
-    fig, ax = plt.subplots(figsize=(5.6, 5.4))
+    fig, ax = plt.subplots(figsize=(4.6, 4.4))
     ax.hexbin(j.temp_c_st, j.temp_c_om, gridsize=60, cmap="Blues", mincnt=1, linewidths=0)
     ax.plot([-25, 35], [-25, 35], color=ORANGE, lw=1.5, ls="--")
     ax.set_xlabel("Station export (°C)")
@@ -178,7 +180,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     n["test_pinball_q50"] = round(
         pinball_loss(te.kw.to_numpy()[ok], pred_te.q50.to_numpy()[ok], 0.5), 2
     )
-    fig, ax = plt.subplots(figsize=(9, 4))
+    fig, ax = plt.subplots(figsize=(8, 3.4))
     ax.axhline(0, color=GRAY, lw=1)
     ax.plot(
         range(1, 13),
@@ -199,7 +201,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         label="after level tracking (what CUSUM sees)",
     )
     ax.set_xticks(range(1, 13))
-    ax.set_xticklabels(list("JFMAMJJASOND"))
+    ax.set_xticklabels(MONTHS)
     ax.set_ylabel("Mean z (σ units)")
     ax.set_title(
         "2019 monthly mean residual — the level drifts by up to 1.5σ; the tracker removes it"
@@ -209,7 +211,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
 
     # ------------------------------------------------------------ Fig 5 tuning grid
     grid = pd.DataFrame(TUNING_GRID, columns=["k", "h", "spike", "fa"])
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=(6.5, 3.6))
     for (h, sp), gg in grid.groupby(["h", "spike"]):
         ax.plot(
             gg.k,
@@ -247,9 +249,10 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         }
     n["eval_2019"] = res
     r5 = res["seeds_5_9"]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+    fig, axes = plt.subplots(1, 2, figsize=(9.5, 3.8))
     x = np.arange(len(ANOMALY_TYPES))
-    w = 0.36
+    w = 0.34
+    off = 0.2
     for ax, key, ylab, log in (
         (axes[0], "recall", "Recall", False),
         (axes[1], "ttd_median_min", "Time to detect", True),
@@ -257,14 +260,14 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         dv = [r5["detector"][t][key] for t in ANOMALY_TYPES]
         bv = [r5["baseline"][t][key] for t in ANOMALY_TYPES]
         ax.bar(
-            x - w / 2,
+            x - off,
             dv,
             w,
             color=BLUE,
             label=f"Detector ({r5['detector']['clean']['fa_per_week']:.2f} FA/week)",
         )
         ax.bar(
-            x + w / 2,
+            x + off,
             bv,
             w,
             color=ORANGE,
@@ -281,8 +284,8 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         else:
             ax.set_ylim(0, 1.12)
             for i, (a, b) in enumerate(zip(dv, bv, strict=True)):
-                ax.text(i - w / 2, a + 0.02, f"{a:.2f}", ha="center", fontsize=8)
-                ax.text(i + w / 2, b + 0.02, f"{b:.2f}", ha="center", fontsize=8)
+                ax.text(i - w / 2, a + 0.02, f"{a:.2f}", ha="center", fontsize=7)
+                ax.text(i + w / 2, b + 0.02, f"{b:.2f}", ha="center", fontsize=7)
     axes[0].legend(loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=2, fontsize=9)
     fig.suptitle(
         "Held-out 2019 (injection seeds disjoint from tuning) — recall and time to detect",
@@ -306,7 +309,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         sweep.append({"mag": mag, "recall": round(mtr["recall"], 2), "ttd": mtr["ttd_median_min"]})
     n["offset_sweep_6h"] = sweep
     sw = pd.DataFrame(sweep)
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(7, 3.4))
     ax.plot(sw.mag * 100, sw.recall, color=BLUE, lw=2, marker="o")
     for _, row in sw.iterrows():
         if row.recall > 0:
@@ -336,7 +339,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     covm = covm[covm.index >= "2018-01"]  # drop the partial local-time month at the UTC boundary
     n["coverage_by_year"] = inside.groupby(ts_ok.dt.year).mean().round(3).to_dict()
     n["months_below_0_80"] = int((covm < 0.80).sum())
-    fig, ax = plt.subplots(figsize=(11, 4))
+    fig, ax = plt.subplots(figsize=(9.5, 3.6))
     ax.plot(range(len(covm)), covm.values, color=BLUE, lw=2, marker="o", ms=3)
     ax.axhline(0.90, color=GRAY, lw=1, ls="--")
     ax.text(
@@ -357,7 +360,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
 
     # ------------------------------------------------------------ Fig 7 replay alerts
     rep = pd.DataFrame(REPLAY_ALERTS)
-    fig, ax = plt.subplots(figsize=(10, 4.2))
+    fig, ax = plt.subplots(figsize=(9, 3.6))
     ax.bar(rep.mon, rep.low, color=BLUE, label="LOW (below expectation)")
     ax.bar(rep.mon, rep.high, bottom=rep.low, color=ORANGE, label="HIGH (above expectation)")
     ax.axvspan(1.5, 3.5, color=GRAY, alpha=0.12, lw=0)
@@ -383,7 +386,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         sc.ts <= pd.Timestamp("2020-01-03 05:00", tz="UTC")
     )
     fig, (ax, ax2) = plt.subplots(
-        2, 1, figsize=(10, 6.6), sharex=True, gridspec_kw={"height_ratios": [2.2, 1]}
+        2, 1, figsize=(9, 5.8), sharex=True, gridspec_kw={"height_ratios": [2.2, 1]}
     )
     ax.fill_between(
         t[win],
