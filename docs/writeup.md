@@ -215,7 +215,7 @@ For every 15-minute slot the detector needs an **expected value** and a **normal
 
 **A — Residual-based (chosen).** Predict conditional quantiles of demand from context with gradient-boosted trees; the anomaly signal is the signed, standardised residual of the observation against the median, with the 5–95 % quantiles giving the band.
 
-**B — Autoencoder (the incumbent).** Reconstruction error of a window plus context. Direction-blind (§2); the threshold is a number on an error scale nobody can interpret; and its inputs include the demand itself, so it learns neighbours. It *can* catch within-hour shape anomalies (an oscillating compressor) that a point model cannot. Kept as a possible second signal, not the core.
+**B — Autoencoder (the incumbent).** Reconstruction error of a window plus context. Direction-blind (§2); the threshold sits on an error scale with no physical meaning; and its inputs include the demand itself, so it learns neighbours. It *can* catch within-hour shape anomalies (an oscillating compressor) that a point model cannot. Kept as a possible second signal, not the core.
 
 **C — Ensemble of A and B.** Marginally more recall on a single meter for twice the operational surface and two thresholds to explain.
 
