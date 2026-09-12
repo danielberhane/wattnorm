@@ -1,25 +1,29 @@
-"""Regenerate every figure and profiling number quoted in docs/writeup.md.
+"""Regenerate every figure and number quoted in docs/writeup.md.
 
-    MLFLOW_TRACKING_URI=sqlite:///mlruns.db uv run --with matplotlib python scripts/figures.py
+    make figures   # MLFLOW_TRACKING_URI=http://localhost:5001 uv run python scripts/figures.py
 
-Writes docs/img/fig*.png and prints the computed numbers as JSON. Uses the model at
-models:/smartbuilding-detector@production in the local registry (train.py, then
-evaluate.py --promote).
+Uses the model at models:/smartbuilding-detector@production in the *stack's* registry — the one
+the scorer runs — and the stack's database for the replay numbers, so the paper, the registry and
+the dashboard describe the same model. Writes docs/img/fig*.png and docs/img/numbers.json; every
+figure in the write-up is quoted from that file.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
+from pathlib import Path
 
 import matplotlib
 import mlflow
 import numpy as np
 import pandas as pd
+import psycopg
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from smartbuilding.config import Env, load_config  # noqa: E402
+from smartbuilding.config import Env, Rules, load_config  # noqa: E402
 from smartbuilding.data.demand import gap_report  # noqa: E402
 from smartbuilding.data.splits import temporal_split  # noqa: E402
 from smartbuilding.data.weather import load_weather_metric  # noqa: E402
@@ -30,6 +34,7 @@ from smartbuilding.eval import (  # noqa: E402
     run_eval,
 )
 from smartbuilding.features import FEATURES, build_features  # noqa: E402
+from smartbuilding.model import Detector  # noqa: E402
 from smartbuilding.pipeline import load_dataset, pinball_loss  # noqa: E402
 from smartbuilding.registry import load_detector  # noqa: E402
 
@@ -49,20 +54,88 @@ plt.rcParams.update(
 OUT = "docs/img"
 MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
-# Threshold grid on 2018 as recorded in docs/PLAN.md (re-run: evaluate.py --split calibrate)
-TUNING_GRID = [
-    (1.0, 12, 4, 2.57), (1.0, 16, 4, 2.30), (1.0, 12, 5, 2.22), (1.0, 16, 5, 1.98),
-    (1.5, 12, 4, 1.44), (1.5, 16, 4, 1.38), (1.5, 12, 5, 1.11), (1.5, 16, 5, 1.02),
-    (2.0, 12, 4, 1.05), (2.0, 16, 4, 1.04), (2.0, 12, 5, 0.61), (2.0, 16, 5, 0.59),
-]  # fmt: skip
-# Alerts per month from the live replay (SELECT ... FROM alerts GROUP BY month; docs/PLAN.md)
-REPLAY_ALERTS = {
-    "mon": ["2020-01", "2020-02", "2020-03", "2020-04", "2020-05", "2020-06", "2020-07", "2020-08",
-            "2020-09", "2020-10", "2020-11", "2020-12", "2021-01", "2021-02", "2021-03", "2021-04",
-            "2021-05"],
-    "low": [6, 1, 13, 14, 2, 8, 2, 7, 3, 9, 7, 4, 9, 1, 2, 4, 0],
-    "high": [8, 8, 3, 6, 29, 9, 11, 7, 7, 12, 13, 18, 17, 9, 22, 7, 8],
-}  # fmt: skip
+K_GRID, H_GRID, Z_GRID = (1.0, 1.5, 2.0), (12, 16), (4, 5)
+
+
+def tuning_grid(det: Detector, cal: pd.DataFrame, rules: Rules) -> pd.DataFrame:
+    """Clean false alarms per week and recall on small (+10 %, 6 h) offsets for each rule cell on
+    the calibration year. The default injected anomalies are large enough that every cell catches
+    them; the small offsets are what separates the cells."""
+    keep = det.rules
+    rows = []
+    for k, h, z in itertools.product(K_GRID, H_GRID, Z_GRID):
+        det.rules = rules.model_copy(update={"cusum_k": k, "cusum_h": h, "spike_z": z})
+        clean_sc, _ = det.score(cal)
+        fa = event_metrics(pd.DataFrame(columns=["start", "end", "type"]), clean_sc, 0)
+        small = offset_sweep(det, cal, mags=(0.10,), n_events=20, seed=3)[0]
+        rows.append(
+            {"k": k, "h": h, "spike": z, "fa": fa["fa_per_week"], "recall_10pct": small["recall"]}
+        )
+    det.rules = keep
+    return pd.DataFrame(rows)
+
+
+def offset_sweep(det: Detector, frame: pd.DataFrame, mags, n_events: int, seed: int) -> list[dict]:
+    """Inject `n_events` six-hour sustained offsets of each relative size at random start slots
+    (at least four days apart) and report event recall and median time to detect. A size of 0.0
+    injects nothing and measures how often a random window overlaps a background alert."""
+    rng = np.random.default_rng(seed)
+    f = frame.reset_index(drop=True)
+    out = []
+    for mag in mags:
+        starts: list[int] = []
+        while len(starts) < n_events:
+            s0 = int(rng.integers(96, len(f) - 96 * 3))
+            if all(abs(s0 - t) >= 96 * 4 for t in starts):
+                starts.append(s0)
+        injected = f.copy()
+        labels = []
+        for s0 in sorted(starts):
+            injected.loc[s0 : s0 + 23, "kw"] *= 1 + mag
+            labels.append({"start": s0, "end": s0 + 23, "type": "offset"})
+        sc, _ = det.score(injected)
+        m = event_metrics(pd.DataFrame(labels), sc, tolerance_slots=4)
+        out.append({"mag": mag, "recall": round(m["recall"], 2), "ttd": m["ttd_median_min"]})
+    return out
+
+
+def matched_fa_baseline(
+    train: pd.DataFrame, cal: pd.DataFrame, rules: Rules, tz: str, target_fa: float
+) -> float:
+    """The baseline's CUSUM allowance k that brings its clean false-alarm rate on the calibration
+    year closest to the detector's, so the 2019 comparison is at (roughly) equal alarm budget."""
+    best_k, best_gap = rules.cusum_k, float("inf")
+    for k in (1.5, 1.25, 1.0, 0.75, 0.5):
+        base = BaselineDetector.fit(train, rules.model_copy(update={"cusum_k": k}), tz)
+        sc, _ = base.score(cal)
+        fa = event_metrics(pd.DataFrame(columns=["start", "end", "type"]), sc, 0)["fa_per_week"]
+        if abs(fa - target_fa) < best_gap:
+            best_k, best_gap = k, abs(fa - target_fa)
+    return best_k
+
+
+def replay_from_db(url: str) -> tuple[pd.DataFrame, dict]:
+    """Alert events per month by direction, and band coverage per year, from the stack's database
+    (the replay of 2020-01 → 2021-05 through the live scorer)."""
+    with psycopg.connect(url) as conn:
+        alerts = pd.read_sql(
+            "SELECT to_char(started_at AT TIME ZONE 'America/New_York', 'YYYY-MM') AS mon, "
+            "CASE WHEN alert_type LIKE '%%LOW' THEN 'low' ELSE 'high' END AS side, "
+            "count(*) AS n, sum(excess_kwh) AS kwh FROM alerts GROUP BY 1, 2 ORDER BY 1, 2",
+            conn,
+        )
+        cov = pd.read_sql(
+            "SELECT extract(year FROM ts AT TIME ZONE 'America/New_York')::int AS yr, "
+            "avg((actual_kw BETWEEN lower_kw AND upper_kw)::int) AS coverage, count(*) AS n "
+            "FROM scores WHERE actual_kw IS NOT NULL GROUP BY 1 ORDER BY 1",
+            conn,
+        )
+    table = alerts.pivot_table(index="mon", columns="side", values="n", fill_value=0).reset_index()
+    for c in ("low", "high"):
+        table[c] = table.get(c, 0)
+    kwh = alerts.groupby("mon").kwh.sum()
+    table["kwh"] = table.mon.map(kwh).fillna(0).round(0)
+    return table, {int(r.yr): (round(float(r.coverage), 3), int(r.n)) for r in cov.itertuples()}
 
 
 def save(fig, name: str) -> None:
@@ -109,6 +182,16 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     n["weekend_mean_kw"] = round(float(d.kw[loc.dt.dayofweek >= 5].mean()), 1)
     byh = d.kw.groupby(loc.dt.hour).mean()
     n["hour_min"], n["hour_max"] = int(byh.idxmin()), int(byh.idxmax())
+    n["trough_below_peak_pct"] = round(float((byh.max() - byh.min()) / byh.max() * 100), 1)
+    raw = pd.read_csv(cfg.paths.demand_csv, usecols=["Timestamp"]).Timestamp
+    n["demand_clock"] = {  # evidence that the export clock is UTC (see §3.1)
+        "first": str(raw.iloc[0]),
+        "last": str(raw.iloc[-1]),
+        "rows_02xx_on_2019-03-10": int(raw.str.startswith("2019-03-10 02:").sum()),
+        "rows_01xx_on_2019-11-03": int(raw.str.startswith("2019-11-03 01:").sum()),
+    }
+    cdd = (tr.temp_c - 22).clip(lower=0)
+    n["r_kw_cdd_train"] = round(float(tr.kw.corr(cdd)), 3)
     wk = d.kw[loc.dt.dayofweek < 5].groupby(loc.dt.hour[loc.dt.dayofweek < 5]).mean()
     we = d.kw[loc.dt.dayofweek >= 5].groupby(loc.dt.hour[loc.dt.dayofweek >= 5]).mean()
     fig, ax = plt.subplots(figsize=(8, 3.4))
@@ -120,7 +203,10 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     ax.set_xticks(range(0, 24, 3))
     ax.set_xlabel("Hour of day (local)")
     ax.set_ylabel("Mean demand (kW)")
-    ax.set_title("Hourly mean demand, 2016–2017 — trough at 07:00, peak at 19:00")
+    ax.set_title(
+        f"Hourly mean demand, 2016–2017 — trough at {n['hour_min']:02d}:00, "
+        f"peak at {n['hour_max']:02d}:00 local"
+    )
     save(fig, "fig1_daily_profile")
 
     # ------------------------------------------------------------ Fig 2 weather validation
@@ -203,49 +289,72 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     ax.set_xticks(range(1, 13))
     ax.set_xticklabels(MONTHS)
     ax.set_ylabel("Mean z (σ units)")
+    drift = max(abs(v) for v in n["z2019_raw_monthly"])
     ax.set_title(
-        "2019 monthly mean residual — the level drifts by up to 1.5σ; the tracker removes it"
+        f"2019 monthly mean residual — the level drifts by up to {drift:.1f}σ; "
+        "the tracker removes it"
     )
     ax.legend(loc="lower right")
-    save(fig, "fig4_level_drift")
+    save(fig, "fig3_level_drift")
 
-    # ------------------------------------------------------------ Fig 5 tuning grid
-    grid = pd.DataFrame(TUNING_GRID, columns=["k", "h", "spike", "fa"])
-    fig, ax = plt.subplots(figsize=(6.5, 3.6))
-    for (h, sp), gg in grid.groupby(["h", "spike"]):
-        ax.plot(
-            gg.k,
-            gg.fa,
-            marker="o",
-            lw=1.8,
-            color=BLUE if sp == 5 else ORANGE,
-            ls="-" if h == 12 else "--",
-            label=f"spike z > {sp}, h = {h}",
-        )
-    ax.axhline(3, color=RED, lw=1, ls=":")
-    ax.text(2.02, 3.05, "budget: 3 / week", color=RED, fontsize=9)
-    ax.scatter([1.5], [1.11], s=180, facecolors="none", edgecolors=INK, lw=1.5, zorder=5)
-    ax.annotate(
-        "chosen",
-        (1.5, 1.11),
-        xytext=(1.6, 1.8),
-        fontsize=9,
-        arrowprops={"arrowstyle": "-", "color": INK, "lw": 0.8},
+    # ------------------------------------------------------------ Fig 4 tuning grid (2018)
+    grid = tuning_grid(det, cal, cfg.rules)
+    n["tuning_grid"] = grid.round(3).to_dict("records")
+    chosen = grid[
+        (grid.k == cfg.rules.cusum_k)
+        & (grid.h == cfg.rules.cusum_h)
+        & (grid.spike == cfg.rules.spike_z)
+    ].iloc[0]
+    fig, axes = plt.subplots(1, 2, figsize=(9.5, 3.6))
+    panels = (
+        (axes[0], "fa", "False alarms / week (clean 2018)"),
+        (axes[1], "recall_10pct", "Recall, +10 % offsets for 6 h (2018)"),
     )
-    ax.set_xlabel("CUSUM allowance k")
-    ax.set_ylabel("False alarms / week (clean 2018)")
-    ax.set_xticks([1.0, 1.5, 2.0])
-    ax.legend(fontsize=9)
-    ax.set_title("Threshold tuning on the calibration year — k is the lever")
-    save(fig, "fig5_tuning")
+    for ax, col, ylab in panels:
+        for (h, sp), gg in grid.groupby(["h", "spike"]):
+            ax.plot(
+                gg.k,
+                gg[col],
+                marker="o",
+                lw=1.8,
+                color=BLUE if sp == 5 else ORANGE,
+                ls="-" if h == 12 else "--",
+                label=f"spike z > {sp}, h = {h}",
+            )
+        ax.scatter(
+            [chosen.k], [chosen[col]], s=180, facecolors="none", edgecolors=INK, lw=1.5, zorder=5
+        )
+        ax.set_xlabel("CUSUM allowance k")
+        ax.set_ylabel(ylab)
+        ax.set_xticks(list(K_GRID))
+    axes[0].axhline(3, color=RED, lw=1, ls=":")
+    axes[0].text(2.02, 3.05, "budget: 3 / week", color=RED, fontsize=9, ha="right")
+    axes[0].set_ylim(0, 3.5)
+    axes[1].set_ylim(0, 1.08)
+    axes[0].legend(fontsize=8)
+    fig.suptitle(
+        "Threshold tuning on the calibration year — k trades false alarms for sensitivity; "
+        "chosen setting circled",
+        fontweight="bold",
+        color=INK,
+    )
+    save(fig, "fig4_tuning")
 
     # ------------------------------------------------------------ §9.1 2019, two seed sets
     base = BaselineDetector.fit(calc, cfg.rules, tz)
+    k_matched = matched_fa_baseline(
+        tr.dropna(subset=["kw"]), cal, cfg.rules, tz, target_fa=float(chosen.fa)
+    )
+    n["baseline_matched_k"] = k_matched
+    base_m = BaselineDetector.fit(calc, cfg.rules.model_copy(update={"cusum_k": k_matched}), tz)
     res = {}
     for label, seeds in (("seeds_0_4", range(5)), ("seeds_5_9", range(5, 10))):
         res[label] = {
             "detector": run_eval(det, te, n_per_type=3, seeds=seeds).round(3).to_dict("index"),
             "baseline": run_eval(base, te, n_per_type=3, seeds=seeds).round(3).to_dict("index"),
+            "baseline_matched_fa": run_eval(base_m, te, n_per_type=3, seeds=seeds)
+            .round(3)
+            .to_dict("index"),
         }
     n["eval_2019"] = res
     r5 = res["seeds_5_9"]
@@ -292,27 +401,22 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
         fontweight="bold",
         color=INK,
     )
-    save(fig, "fig6_results_2019")
+    save(fig, "fig5_results_2019")
 
-    # ------------------------------------------------------------ Fig 9 sensitivity floor
-    rng = np.random.default_rng(11)
-    tec = te.reset_index(drop=True)
-    sweep = []
-    for mag in (0.05, 0.08, 0.10, 0.12, 0.15, 0.20, 0.30, 0.40):
-        injected, labels = tec.copy(), []
-        starts = rng.choice(np.arange(96, len(tec) - 96 * 3, 96 * 4), size=20, replace=False)
-        for s0 in sorted(int(s) for s in starts):
-            injected.loc[s0 : s0 + 23, "kw"] *= 1 + mag
-            labels.append({"start": s0, "end": s0 + 23, "type": "offset"})
-        sc, _ = det.score(injected)
-        mtr = event_metrics(pd.DataFrame(labels), sc, tolerance_slots=4)
-        sweep.append({"mag": mag, "recall": round(mtr["recall"], 2), "ttd": mtr["ttd_median_min"]})
+    # ------------------------------------------------------------ Fig 6 sensitivity floor
+    sweep = offset_sweep(
+        det, te, mags=(0.0, 0.05, 0.08, 0.10, 0.12, 0.15, 0.20, 0.30, 0.40), n_events=20, seed=11
+    )
     n["offset_sweep_6h"] = sweep
     sw = pd.DataFrame(sweep)
     fig, ax = plt.subplots(figsize=(7, 3.4))
     ax.plot(sw.mag * 100, sw.recall, color=BLUE, lw=2, marker="o")
+    ax.axhline(sw.recall.iloc[0], color=GRAY, lw=1, ls=":")
+    ax.text(
+        41, sw.recall.iloc[0] + 0.03, "chance (0 % offset)", color="#374151", fontsize=8, ha="right"
+    )
     for _, row in sw.iterrows():
-        if row.recall > 0:
+        if row.recall > 0 and row.mag > 0:
             ax.text(
                 row.mag * 100,
                 row.recall + 0.04,
@@ -327,7 +431,7 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     ax.set_title(
         "Sensitivity floor — recall vs offset size (labels: median minutes to first alert)"
     )
-    save(fig, "fig9_offset_sweep")
+    save(fig, "fig6_offset_sweep")
 
     # ------------------------------------------------------------ Fig 10 coverage drift 2018 → 2021
     full = data[data.ts >= "2018-01-01"].reset_index(drop=True)
@@ -356,16 +460,20 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     ax.set_title(
         "Monthly band coverage with the model frozen at 2018 — why retraining is a component"
     )
-    save(fig, "fig10_coverage_drift")
+    save(fig, "fig8_coverage_drift")
 
     # ------------------------------------------------------------ Fig 7 replay alerts
-    rep = pd.DataFrame(REPLAY_ALERTS)
+    rep, n["replay_coverage_by_year"] = replay_from_db(Env().db_url)
+    n["replay_alerts_by_month"] = rep.to_dict("records")
+    n["replay_alerts_total"] = int(rep.low.sum() + rep.high.sum())
     fig, ax = plt.subplots(figsize=(9, 3.6))
     ax.bar(rep.mon, rep.low, color=BLUE, label="LOW (below expectation)")
     ax.bar(rep.mon, rep.high, bottom=rep.low, color=ORANGE, label="HIGH (above expectation)")
-    ax.axvspan(1.5, 3.5, color=GRAY, alpha=0.12, lw=0)
-    ax.text(2.5, 24, "lockdown", ha="center", color="#374151", fontsize=10)
-    ax.set_ylim(0, 36)
+    lock = [i for i, m in enumerate(rep.mon) if m in ("2020-03", "2020-04")]
+    ymax = float((rep.low + rep.high).max()) * 1.25
+    ax.axvspan(lock[0] - 0.5, lock[-1] + 0.5, color=GRAY, alpha=0.12, lw=0)
+    ax.text(np.mean(lock), ymax * 0.9, "lockdown", ha="center", color="#374151", fontsize=10)
+    ax.set_ylim(0, ymax)
     ax.set_ylabel("Alert events")
     ax.grid(axis="x", visible=False)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
@@ -432,10 +540,12 @@ def main() -> None:  # noqa: PLR0915 — one linear script, one figure per block
     ax2.text(t[win].iloc[0], 5.4, "spike: z > 5", color="#374151", fontsize=8)
     ax2.set_ylabel("σ  /  CUSUM")
     ax2.legend(loc="upper left", fontsize=8)
-    save(fig, "fig8_alert_example")
-    n["fig8_alert_runs"] = [(str(t[a]), str(t[b])) for a, b in runs]
+    save(fig, "fig9_alert_example")
+    n["fig9_alert_runs"] = [(str(t[a]), str(t[b])) for a, b in runs]
 
-    print(json.dumps(n, indent=1, default=str))
+    out = json.dumps(n, indent=1, default=str)
+    (Path(OUT) / "numbers.json").write_text(out + "\n")
+    print(out)
 
 
 if __name__ == "__main__":

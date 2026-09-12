@@ -13,8 +13,9 @@ catches sustained deviations.*
 
 ![Sustainability tiles](docs/img/tiles.png)
 
-*Excess energy above the normal band, summed over the selected range, times the grid emission factor
-and tariff (both editable on the dashboard — the defaults are placeholders).*
+*Excess energy recorded on HIGH alerts that started in the selected range, times the grid emission
+factor and tariff (both editable on the dashboard — the defaults are placeholders). Readings outside an
+alert are not counted, so a normal building reads zero.*
 
 ## How it works
 
@@ -33,8 +34,9 @@ and tariff (both editable on the dashboard — the defaults are placeholders).*
   recall / false alarms per week / time-to-detect, against a seasonal-naive baseline sharing the
   same rules. Splits are strictly temporal: train 2016–17 · calibrate 2018 · test 2019 · replay
   2020-01 → 2021-05.
-- **Operations** — MLflow registry with a promotion gate, scorer hot-swap, nightly retrain on a
-  trailing window, one Grafana dashboard whose health row is plain SQL on the `scores` table.
+- **Operations** — MLflow registry with a promotion gate, scorer hot-swap, trailing-window retrain
+  (`make retrain`, cron-able), one Grafana dashboard whose health row is plain SQL on the `scores`
+  table. `/health` reports the model version and the rules it is running.
 
 ## Terms used above
 
@@ -61,6 +63,7 @@ make eval       # evaluate vs baseline on the held-out year; promotes @productio
 make backfill   # load the whole 2020-01 → 2021-05 history fast (background)
 make live       # human-paced demo: one building day per ~15 min   (START=… INJECT=sustained_offset)
 make retrain    # trailing-window retrain with promotion gate  (AS_OF=YYYY-MM-DD)
+make figures    # regenerate docs/img/fig*.png and numbers.json from the stack's model and database
 ```
 
 Grafana http://localhost:3000 (view without login; admin/admin to edit) · MLflow http://localhost:5001 ·
@@ -70,7 +73,8 @@ scorer http://localhost:8001/health
 
 `data/raw/demand.csv` (gitignored) is the 15-minute electric demand of Clark Hall, Cornell University,
 in kW (the portal reports building electricity as power; the pipeline converts each slot to kWh as
-`kW × 0.25 h`). The data are not redistributed with this repository.
+`kW × 0.25 h`). The export's clock is UTC (`site.demand_tz` in `configs/default.yaml`); calendar
+features are computed in `America/New_York`. The data are not redistributed with this repository.
 
 > Cornell University, Facilities and Campus Services — Energy and Sustainability. *Energy Management and Control System (EMCS) Portal*, Clark Hall electric demand, 15-minute interval, January 2015 – May 2021. https://portal.emcs.cornell.edu (accessed 2022 for the original study; re-used here). Data are the property of Cornell University and are used for research and educational purposes.
 
@@ -82,3 +86,7 @@ decisions: `docs/PLAN.md`. Operating guide for building managers: `docs/runbook.
 Publish `{"meter_id": "...", "ts": "<ISO-8601 with offset>", "kw": <float>}` to
 `building/<meter_id>/demand` (QoS 1) and weather to `weather/<station_id>/obs`. Nothing downstream
 changes; the broker and database are `.env` settings.
+
+## License
+
+MIT — see `LICENSE`. The Clark Hall data are Cornell University's and are not covered by it.

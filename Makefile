@@ -1,4 +1,4 @@
-.PHONY: setup lint test train train-local eval eval-local up down replay backfill live retrain logs weather
+.PHONY: setup lint test train train-local eval eval-local up down replay backfill live retrain logs weather figures
 START ?= 2020-01-01
 INJECT ?=
 AS_OF ?=
@@ -53,3 +53,6 @@ logs:
 
 weather:  ## fetch the Open-Meteo archive to data/processed
 	uv run python -m smartbuilding.data.openmeteo --start 2015-01-01 --end 2021-05-31
+
+figures:  ## regenerate docs/img/fig*.png and docs/img/numbers.json from the stack's model and database
+	MLFLOW_TRACKING_URI=http://localhost:5001 uv run --with matplotlib python scripts/figures.py > /dev/null

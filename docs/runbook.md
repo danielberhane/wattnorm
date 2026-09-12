@@ -24,7 +24,7 @@ Acknowledge an alert: `UPDATE alerts SET acknowledged = true WHERE id = <id>;` (
 ## Operations
 - Start/stop: `make up` / `make down` (`make down VOLUMES=1` wipes data; `deploy/init.sql` only runs on a fresh volume).
 - Backfill history: `make backfill` (background, ~40 min). Live-paced demo: `make live START=2020-04-01 [INJECT=sustained_offset]`.
-- Train / evaluate / promote: `make train` → `make eval` (promotes `@production` on PASS). Scorer hot-swaps within 10 min or on `curl -X POST localhost:8001/reload-model`.
+- Train / evaluate / promote: `make train` → `make eval` (promotes `@production` on PASS). Scorer hot-swaps within 10 min or on `curl -X POST localhost:8001/reload-model`; `curl localhost:8001/health` shows the version, the rules (spike z, CUSUM k/h …) and the calibration factor it is running — the dashboard's dashed spike line is a static mirror of `spike_z`, so check here if they disagree.
 - Nightly retrain: `make retrain [AS_OF=YYYY-MM-DD]` — trailing 24 months, gate vs baseline **and** current production; add to cron: `0 2 * * * cd <repo> && make retrain`.
 - Rollback: in MLflow set alias `production` back to the previous version (UI → Models → smartbuilding-detector → aliases), then `curl -X POST localhost:8001/reload-model`.
 - Truncating tables while the scorer runs is safe: a reading > 1 day older than the last one resets that meter's state.
