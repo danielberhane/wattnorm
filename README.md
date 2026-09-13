@@ -15,7 +15,7 @@ waste, too low = failure** — with the avoidable energy translated to CO₂e an
 building manager, not a data scientist, can act on it. Historical data is replayed through the
 live pipeline today; a real meter publishes the same message format tomorrow.
 
-It is an evolution of work I began for my master's at Western University, published as
+It builds on work from my master's research at Western University, published as
 [*An ensemble learning framework for anomaly detection in building energy consumption*](https://www.sciencedirect.com/science/article/pii/S0378778817306904)
 (Araya, Grolinger, ElYamany, Capretz and Bitsuamlak, *Energy and Buildings* 144, 2017). That paper
 introduced CCAD-SW, a pattern-based classifier that scores overlapping sliding windows of
