@@ -32,3 +32,6 @@ legacy/Untitled*.ipynb
 *.db
 *.sqlite*
 dashboard/
+
+# local copies of papers, never published
+docs/*.pdf
