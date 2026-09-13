@@ -1,4 +1,4 @@
-# Smartbuildings — Real-Time Contextual Energy Anomaly Detection
+# Wattnorm — Real-Time Contextual Energy Anomaly Detection
 
 ## Context
 

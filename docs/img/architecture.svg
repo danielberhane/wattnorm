@@ -2,7 +2,7 @@
   <rect width="2300" height="920" fill="#ffffff"/>
 
   <!-- title -->
-  <text x="1150" y="90" text-anchor="middle" font-size="68" font-weight="600" fill="#111827">Smartbuildings — Real-time pipeline</text>
+  <text x="1150" y="90" text-anchor="middle" font-size="68" font-weight="600" fill="#111827">Wattnorm — Real-time pipeline</text>
   <text x="1150" y="140" text-anchor="middle" font-size="32" fill="#6B7280">every meter reading scored against what the building should draw  ·  one model, one database, one dashboard</text>
   <line x1="600" y1="176" x2="1700" y2="176" stroke="#E5E7EB" stroke-width="2"/>
 

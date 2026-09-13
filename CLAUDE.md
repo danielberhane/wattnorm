@@ -1,4 +1,4 @@
-# Smartbuildings — real-time contextual energy anomaly detection
+# Wattnorm — real-time contextual energy anomaly detection
 
 Learns the *expected* electric demand of a building for any (time, weather) context, scores each
 15-min reading against it, and raises direction-aware alerts (too high = waste, too low = failure)

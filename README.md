@@ -1,4 +1,6 @@
-# Smartbuildings — real-time contextual energy anomaly detection
+# Wattnorm — real-time contextual energy anomaly detection for buildings
+
+*Knows what your building should be drawing.*
 
 Buildings account for roughly a third of global energy use, and a large share of that is wasted
 quietly: an air-handling unit left running over a weekend, a lighting schedule that never switched
@@ -7,7 +9,7 @@ raw reading cannot say whether 280 kW is a problem — at 2 p.m. on a hot July w
 at 2 a.m. on a Sunday in April it is not. An anomaly is a reading that is unusual *for its context*:
 the time, the day, the season, the weather.
 
-This repository is a complete, deployable system built on that idea, developed on six years of
+Wattnorm is a complete, deployable system built on that idea (the Python package is `smartbuilding`), developed on six years of
 15-minute electricity data from a university research building. It learns what the building
 *should* draw for the current time and weather, scores every meter reading against that
 expectation as it arrives, and raises direction-aware alerts on a Grafana dashboard — **too high =

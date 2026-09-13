@@ -2,7 +2,7 @@
 
 ### Data, features, model, evaluation, deployment and monitoring of a real-time system
 
-**Daniel Berhane Araya** · September 2026 · [github.com/danielberhane/smartbuildings](https://github.com/danielberhane/smartbuildings)
+**Daniel Berhane Araya** · September 2026 · [github.com/danielberhane/wattnorm](https://github.com/danielberhane/wattnorm)
 
 *Every number and figure in this document is produced by code in the repository (`scripts/train.py`, `scripts/evaluate.py`, `scripts/figures.py`) using the commands in Appendix A. Where a number was produced once and a design decision then changed, the text says so.*
 
