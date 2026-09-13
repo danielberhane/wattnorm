@@ -1,8 +1,22 @@
 # Smartbuildings — real-time contextual energy anomaly detection
 
-Learns what a building *should* draw for the current time and weather, scores every 15-minute
-meter reading against it as it arrives, and raises direction-aware alerts on Grafana — **too high =
-waste, too low = failure** — with the avoidable energy translated to CO₂e and cost.
+Buildings account for roughly a third of global energy use, and a large share of that is wasted
+quietly: an air-handling unit left running over a weekend, a lighting schedule that never switched
+back after a holiday, a chiller cycling against a failed sensor. A meter records all of it, but a
+raw reading cannot say whether 280 kW is a problem — at 2 p.m. on a hot July weekday it is normal,
+at 2 a.m. on a Sunday in April it is not. An anomaly is a reading that is unusual *for its context*:
+the time, the day, the season, the weather.
+
+This repository is a complete, deployable system built on that idea, developed on six years of
+15-minute electricity data from a university research building. It learns what the building
+*should* draw for the current time and weather, scores every meter reading against that
+expectation as it arrives, and raises direction-aware alerts on a Grafana dashboard — **too high =
+waste, too low = failure** — with the avoidable energy translated to CO₂e and cost so that a
+building manager, not a data scientist, can act on it. Historical data is replayed through the
+live pipeline today; a real meter publishes the same message format tomorrow.
+
+The methodology, data work, evaluation and the defects found along the way are written up in full
+in [`docs/writeup.md`](docs/writeup.md).
 
 ![Building Energy Anomalies dashboard — two weeks of real meter data, January 2020](docs/img/dashboard.png)
 
