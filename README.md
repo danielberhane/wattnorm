@@ -15,17 +15,27 @@ waste, too low = failure** — with the avoidable energy translated to CO₂e an
 building manager, not a data scientist, can act on it. Historical data is replayed through the
 live pipeline today; a real meter publishes the same message format tomorrow.
 
+It is an evolution of work I began for my master's at Western University, published as
+[*An ensemble learning framework for anomaly detection in building energy consumption*](https://www.sciencedirect.com/science/article/pii/S0378778817306904)
+(Araya, Grolinger, ElYamany, Capretz and Bitsuamlak, *Energy and Buildings* 144, 2017). That paper
+introduced CCAD-SW, a pattern-based classifier that scores overlapping sliding windows of
+consumption with an autoencoder, and combined it with prediction-based classifiers in a
+majority-vote ensemble that raised sensitivity by 3.6 % and cut the false-alarm rate by 2.7 % over
+the best single model. This system takes the prediction-based branch of that framework as its core
+and adds what a paper does not need but a deployment does: calibrated bands, adaptation to a
+building that changes, a promotion gate, and a dashboard.
+
 The methodology, data work, evaluation and the defects found along the way are written up in full
 in [`docs/writeup.md`](docs/writeup.md).
 
-![Building Energy Anomalies dashboard — two weeks of real meter data, January 2020](docs/img/dashboard.png)
+<img src="docs/img/dashboard.png" alt="Building Energy Anomalies dashboard — two weeks of real meter data, January 2020" width="100%">
 
 *Real 15-min meter data replayed through the live pipeline (no synthetic values). Blue = metered demand;
 orange dashed = expected demand for that time and weather, adjusted for the building's recent level;
 shaded band = the 90 % normal range; red = alerts. Below: the residual in σ and the CUSUM that
 catches sustained deviations.*
 
-![Sustainability tiles](docs/img/tiles.png)
+<img src="docs/img/tiles.png" alt="Sustainability tiles" width="100%">
 
 *Excess energy recorded on HIGH alerts that started in the selected range, times the grid emission
 factor and tariff (both editable on the dashboard — the defaults are placeholders). Readings outside an
@@ -33,7 +43,7 @@ alert are not counted, so a normal building reads zero.*
 
 ## How it works
 
-![Architecture — meter and weather over MQTT into the scorer, TimescaleDB and Grafana; trainer and MLflow registry feed the model](docs/img/architecture.svg)
+<img src="docs/img/architecture.svg" alt="Architecture — meter and weather over MQTT into the scorer, TimescaleDB and Grafana; trainer and MLflow registry feed the model" width="100%">
 
 - **Model** — LightGBM quantile regression (q05/q50/q95) on calendar (cyclic time-of-day, weekday,
   day-of-year, holidays) and weather (temperature, humidity, wind, pressure, heating/cooling degrees).
