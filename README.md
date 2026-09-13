@@ -19,9 +19,10 @@ It is an evolution of work I began for my master's at Western University, publis
 [*An ensemble learning framework for anomaly detection in building energy consumption*](https://www.sciencedirect.com/science/article/pii/S0378778817306904)
 (Araya, Grolinger, ElYamany, Capretz and Bitsuamlak, *Energy and Buildings* 144, 2017). That paper
 introduced CCAD-SW, a pattern-based classifier that scores overlapping sliding windows of
-consumption with an autoencoder, and combined it with prediction-based classifiers in a
-majority-vote ensemble that raised sensitivity by 3.6 % and cut the false-alarm rate by 2.7 % over
-the best single model. This system takes the prediction-based branch of that framework as its core
+consumption with an autoencoder, and combined it with two prediction-based classifiers (support
+vector regression and random forest) in a majority-vote ensemble that, on real consumption data from
+a building in Brampton, Ontario, raised the sensitivity of CCAD-SW by 3.6 % and cut its false-alarm
+rate by 2.7 %. This system takes the prediction-based branch of that framework as its core
 and adds what a paper does not need but a deployment does: calibrated bands, adaptation to a
 building that changes, a promotion gate, and a dashboard.
 
