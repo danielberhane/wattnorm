@@ -1,83 +1,116 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="2300" height="920" viewBox="0 0 2300 920" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
-  <rect width="2300" height="920" fill="#ffffff"/>
-
-  <!-- title -->
-  <text x="1150" y="90" text-anchor="middle" font-size="68" font-weight="600" fill="#111827">Wattnorm — Real-time pipeline</text>
-  <text x="1150" y="140" text-anchor="middle" font-size="32" fill="#6B7280">every meter reading scored against what the building should draw  ·  one model, one database, one dashboard</text>
-  <line x1="600" y1="176" x2="1700" y2="176" stroke="#E5E7EB" stroke-width="2"/>
-
-  <!-- connectors (under the nodes) -->
-  <g stroke="#111827" stroke-width="3" fill="none">
-    <path d="M 380 325 H 425 V 435 H 380"/>
-    <path d="M 425 380 H 480"/>
-    <path d="M 740 380 H 810"/>
-    <path d="M 1150 380 H 1220"/>
-    <path d="M 1520 380 H 1590"/>
-    <path d="M 1850 380 H 1900"/>
-    <path d="M 760 640 H 900"/>
-  </g>
-  <!-- history: store → trainer (the learning loop) -->
-  <path d="M 1520 425 H 1556 V 810 H 430 V 640 H 480" stroke="#9CA3AF" stroke-width="3" fill="none"/>
-  <text x="1300" y="798" text-anchor="middle" font-size="26" fill="#6B7280">history (file-fed today)</text>
-  <!-- model hot-swap: registry → scorer -->
-  <path d="M 1160 556 V 430" stroke="#2F7BE8" stroke-width="3" stroke-dasharray="10 8" fill="none"/>
-  <text x="1140" y="530" text-anchor="end" font-size="26" fill="#2F7BE8">model  @production</text>
-
-  <circle cx="425" cy="380" r="8" fill="#111827"/>
-
-  <!-- sources -->
-  <rect x="60" y="283" width="320" height="84" rx="42" fill="#EEF2F7" stroke="#111827" stroke-width="3"/>
-  <text x="220" y="338" text-anchor="middle" font-size="38" font-weight="600" fill="#111827">Meter</text>
-  <rect x="60" y="393" width="320" height="84" rx="42" fill="#EEF2F7" stroke="#111827" stroke-width="3"/>
-  <text x="220" y="448" text-anchor="middle" font-size="38" font-weight="600" fill="#111827">Open-Meteo</text>
-  <text x="220" y="528" text-anchor="middle" font-size="26" fill="#6B7280">live or replayed · MQTT</text>
-
-  <!-- broker -->
-  <rect x="480" y="330" width="260" height="100" rx="12" fill="#ffffff" stroke="#111827" stroke-width="3"/>
-  <text x="610" y="394" text-anchor="middle" font-size="38" font-weight="600" fill="#111827">mosquitto</text>
-  <text x="610" y="500" text-anchor="middle" font-size="26" fill="#6B7280">MQTT broker</text>
-
-  <!-- scorer (ours) -->
-  <rect x="810" y="330" width="340" height="100" rx="12" fill="#EAF2FF" stroke="#2F7BE8" stroke-width="3"/>
-  <circle cx="838" cy="356" r="8" fill="none" stroke="#2F7BE8" stroke-width="3"/>
-  <text x="985" y="394" text-anchor="middle" font-size="38" font-weight="600" fill="#1D5FCC">Scorer</text>
-  <text x="960" y="500" text-anchor="middle" font-size="26" fill="#6B7280">expected · band · z · CUSUM</text>
-
-  <!-- TimescaleDB -->
-  <path d="M 1220 322 v 116 a 150 18 0 0 0 300 0 v -116" fill="#E6F7F0" stroke="none"/>
-  <path d="M 1220 322 v 116 a 150 18 0 0 0 300 0 v -116" fill="none" stroke="#1E8E5A" stroke-width="3"/>
-  <ellipse cx="1370" cy="322" rx="150" ry="18" fill="#F3FBF7" stroke="#1E8E5A" stroke-width="3"/>
-  <text x="1370" y="401" text-anchor="middle" font-size="38" font-weight="600" fill="#1E7A4D">TimescaleDB</text>
-  <text x="1370" y="500" text-anchor="middle" font-size="26" fill="#6B7280">readings · scores · alerts</text>
-
-  <!-- Grafana -->
-  <rect x="1590" y="330" width="260" height="100" rx="12" fill="#FFF4DA" stroke="#D9770A" stroke-width="3"/>
-  <text x="1720" y="394" text-anchor="middle" font-size="38" font-weight="600" fill="#B8620A">Grafana</text>
-  <text x="1720" y="500" text-anchor="middle" font-size="26" fill="#6B7280">dashboard · alert rules</text>
-
-  <!-- building manager -->
-  <rect x="1900" y="338" width="360" height="84" rx="42" fill="#EEF2F7" stroke="#111827" stroke-width="3"/>
-  <text x="2080" y="393" text-anchor="middle" font-size="38" font-weight="600" fill="#111827">Building manager</text>
-  <text x="2080" y="500" text-anchor="middle" font-size="26" fill="#6B7280">acts on alerts · kWh · CO₂ · $</text>
-
-  <!-- trainer (ours) -->
-  <rect x="480" y="590" width="280" height="100" rx="12" fill="#ffffff" stroke="#111827" stroke-width="3"/>
-  <circle cx="508" cy="616" r="8" fill="none" stroke="#2F7BE8" stroke-width="3"/>
-  <text x="628" y="654" text-anchor="middle" font-size="38" font-weight="600" fill="#111827">Trainer</text>
-  <text x="620" y="738" text-anchor="middle" font-size="26" fill="#6B7280">trailing-window retrain · promotion gate</text>
-
-  <!-- MLflow -->
-  <path d="M 900 572 v 116 a 150 18 0 0 0 300 0 v -116" fill="#EFEAFF" stroke="none"/>
-  <path d="M 900 572 v 116 a 150 18 0 0 0 300 0 v -116" fill="none" stroke="#7A4FD8" stroke-width="3"/>
-  <ellipse cx="1050" cy="572" rx="150" ry="18" fill="#F6F2FF" stroke="#7A4FD8" stroke-width="3"/>
-  <text x="1050" y="651" text-anchor="middle" font-size="38" font-weight="600" fill="#6B3FCB">MLflow</text>
-  <text x="1050" y="750" text-anchor="middle" font-size="26" fill="#6B7280">experiments · model registry</text>
-
-  <!-- legend -->
-  <circle cx="1640" cy="640" r="8" fill="none" stroke="#2F7BE8" stroke-width="3"/>
-  <text x="1664" y="649" font-size="26" fill="#6B7280">code in this repository</text>
-  <line x1="1632" y1="694" x2="1696" y2="694" stroke="#2F7BE8" stroke-width="3" stroke-dasharray="10 8"/>
-  <text x="1714" y="703" font-size="26" fill="#6B7280">model hot-swap</text>
-  <line x1="1632" y1="748" x2="1696" y2="748" stroke="#9CA3AF" stroke-width="3"/>
-  <text x="1714" y="757" font-size="26" fill="#6B7280">history for retraining (planned DB feed)</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="2420" height="1100" viewBox="0 0 2420 1100" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+<defs>
+<marker id="arr" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L12 6 L0 12 z" fill="#334155"/></marker>
+<marker id="arrb" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L12 6 L0 12 z" fill="#2563EB"/></marker>
+<marker id="arrg" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L12 6 L0 12 z" fill="#94A3B8"/></marker>
+<marker id="arrr" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 L12 6 L0 12 z" fill="#DC2626"/></marker></defs>
+<rect width="2420" height="1100" fill="#FFFFFF"/>
+<text x="1210.0" y="84" text-anchor="middle" font-size="56" font-weight="700" fill="#0F172A">Wattnorm — Architecture</text>
+<text x="1210.0" y="134" text-anchor="middle" font-size="30" font-weight="400" fill="#475569">every 15-min reading scored against what the building should draw</text>
+<rect x="450" y="200" width="1500" height="850" rx="18" fill="#F8FAFC" stroke="#94A3B8" stroke-width="3" stroke-dasharray="14 10"/>
+<text x="480" y="244" text-anchor="start" font-size="24" font-weight="700" fill="#475569">DOCKER COMPOSE STACK</text>
+<path d="M 340 355 H 395 V 645 H 340" fill="none" stroke="#334155" stroke-width="3"/>
+<circle cx="395" cy="405" r="8" fill="#334155"/>
+<path d="M 395 405 H 478" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arr)"/>
+<text x="382" y="525" transform="rotate(-90 382 525)" text-anchor="middle" font-size="24" font-weight="700" fill="#475569">MQTT publish</text>
+<path d="M 750 405 H 868" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arr)"/>
+<text x="809" y="390" text-anchor="middle" font-size="24" font-weight="400" fill="#475569">subscribe</text>
+<path d="M 1170 405 H 1268" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arr)"/>
+<text x="1219" y="390" text-anchor="middle" font-size="24" font-weight="400" fill="#475569">write</text>
+<path d="M 1570 405 H 1668" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arr)"/>
+<text x="1619" y="390" text-anchor="middle" font-size="24" font-weight="400" fill="#475569">SQL</text>
+<path d="M 1910 405 H 2038" fill="none" stroke="#DC2626" stroke-width="3" marker-end="url(#arrr)"/>
+<text x="1975" y="390" text-anchor="middle" font-size="24" font-weight="700" fill="#DC2626">notify</text>
+<path d="M 750 785 H 868" fill="none" stroke="#334155" stroke-width="3" marker-end="url(#arr)"/>
+<text x="809" y="770" text-anchor="middle" font-size="24" font-weight="400" fill="#475569">register</text>
+<path d="M 1020 680 V 512" fill="none" stroke="#2563EB" stroke-width="3" stroke-dasharray="12 8" marker-end="url(#arrb)"/>
+<text x="1036" y="590" text-anchor="start" font-size="24" font-weight="700" fill="#2563EB">load @production</text>
+<text x="1036" y="622" text-anchor="start" font-size="24" font-weight="400" fill="#2563EB">(hot-swap, no restart)</text>
+<path d="M 1420 510 V 960 H 615 V 892" fill="none" stroke="#94A3B8" stroke-width="3" stroke-dasharray="12 8" marker-end="url(#arrg)"/>
+<text x="1420" y="1000" text-anchor="middle" font-size="24" font-weight="400" fill="#475569">history for retraining — planned DB feed; file-fed today</text>
+<rect x="40" y="250" width="300" height="210" rx="10" fill="#FFFFFF"/>
+<rect x="40" y="250" width="300" height="48" rx="10" fill="#334155"/>
+<rect x="40" y="280" width="300" height="18" fill="#334155"/>
+<rect x="40" y="250" width="300" height="210" rx="10" fill="none" stroke="#334155" stroke-width="3"/>
+<text x="190.0" y="283" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#FFFFFF">SOURCE</text>
+<text x="190.0" y="360" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">Meter</text>
+<text x="190.0" y="402" text-anchor="middle" font-size="27" fill="#475569">15-min kW</text>
+<text x="190.0" y="438" text-anchor="middle" font-size="27" fill="#475569">building/{id}/demand</text>
+<rect x="40" y="540" width="300" height="210" rx="10" fill="#FFFFFF"/>
+<rect x="40" y="540" width="300" height="48" rx="10" fill="#334155"/>
+<rect x="40" y="570" width="300" height="18" fill="#334155"/>
+<rect x="40" y="540" width="300" height="210" rx="10" fill="none" stroke="#334155" stroke-width="3"/>
+<text x="190.0" y="573" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#FFFFFF">SOURCE</text>
+<text x="190.0" y="650" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">Weather</text>
+<text x="190.0" y="692" text-anchor="middle" font-size="27" fill="#475569">Open-Meteo, hourly</text>
+<text x="190.0" y="728" text-anchor="middle" font-size="27" fill="#475569">weather/{id}/obs</text>
+<rect x="480" y="300" width="270" height="210" rx="10" fill="#FFFFFF"/>
+<rect x="480" y="300" width="270" height="48" rx="10" fill="#334155"/>
+<rect x="480" y="330" width="270" height="18" fill="#334155"/>
+<rect x="480" y="300" width="270" height="210" rx="10" fill="none" stroke="#334155" stroke-width="3"/>
+<text x="615.0" y="333" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#FFFFFF">BROKER</text>
+<text x="615.0" y="410" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">mosquitto</text>
+<text x="615.0" y="452" text-anchor="middle" font-size="27" fill="#475569">MQTT broker</text>
+<rect x="870" y="300" width="300" height="210" rx="10" fill="#FFFFFF"/>
+<rect x="870" y="300" width="300" height="48" rx="10" fill="#2563EB"/>
+<rect x="870" y="330" width="300" height="18" fill="#2563EB"/>
+<rect x="870" y="300" width="300" height="210" rx="10" fill="none" stroke="#2563EB" stroke-width="3"/>
+<text x="1020.0" y="333" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#FFFFFF">SERVICE</text>
+<text x="1020.0" y="410" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">Scorer</text>
+<text x="1020.0" y="452" text-anchor="middle" font-size="27" fill="#475569">expected · band</text>
+<text x="1020.0" y="488" text-anchor="middle" font-size="27" fill="#475569">z · CUSUM · rules</text>
+<path d="M 1270 312 v 186 a 150.0 22 0 0 0 300 0 v -186" fill="#F1F5F9" stroke="#334155" stroke-width="3"/>
+<ellipse cx="1420.0" cy="312" rx="150.0" ry="22" fill="#E2E8F0" stroke="#334155" stroke-width="3"/>
+<text x="1420.0" y="378" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#475569">DATABASE</text>
+<text x="1420.0" y="426" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">TimescaleDB</text>
+<text x="1420.0" y="466" text-anchor="middle" font-size="27" fill="#475569">readings · scores</text>
+<text x="1420.0" y="500" text-anchor="middle" font-size="27" fill="#475569">alerts</text>
+<rect x="1670" y="300" width="240" height="210" rx="10" fill="#FFFFFF"/>
+<rect x="1670" y="300" width="240" height="48" rx="10" fill="#334155"/>
+<rect x="1670" y="330" width="240" height="18" fill="#334155"/>
+<rect x="1670" y="300" width="240" height="210" rx="10" fill="none" stroke="#334155" stroke-width="3"/>
+<text x="1790.0" y="333" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#FFFFFF">DASHBOARD</text>
+<text x="1790.0" y="410" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">Grafana</text>
+<text x="1790.0" y="452" text-anchor="middle" font-size="27" fill="#475569">panels</text>
+<text x="1790.0" y="488" text-anchor="middle" font-size="27" fill="#475569">alert rules</text>
+<rect x="480" y="680" width="270" height="210" rx="10" fill="#FFFFFF"/>
+<rect x="480" y="680" width="270" height="48" rx="10" fill="#2563EB"/>
+<rect x="480" y="710" width="270" height="18" fill="#2563EB"/>
+<rect x="480" y="680" width="270" height="210" rx="10" fill="none" stroke="#2563EB" stroke-width="3"/>
+<text x="615.0" y="713" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#FFFFFF">BATCH JOB</text>
+<text x="615.0" y="790" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">Trainer</text>
+<text x="615.0" y="832" text-anchor="middle" font-size="27" fill="#475569">retrain</text>
+<text x="615.0" y="868" text-anchor="middle" font-size="27" fill="#475569">promotion gate</text>
+<path d="M 870 692 v 186 a 150.0 22 0 0 0 300 0 v -186" fill="#F1F5F9" stroke="#334155" stroke-width="3"/>
+<ellipse cx="1020.0" cy="692" rx="150.0" ry="22" fill="#E2E8F0" stroke="#334155" stroke-width="3"/>
+<text x="1020.0" y="758" text-anchor="middle" font-size="22" font-weight="700" letter-spacing="3" fill="#475569">REGISTRY</text>
+<text x="1020.0" y="806" text-anchor="middle" font-size="42" font-weight="700" fill="#0F172A">MLflow</text>
+<text x="1020.0" y="846" text-anchor="middle" font-size="27" fill="#475569">experiments</text>
+<text x="1020.0" y="880" text-anchor="middle" font-size="27" fill="#475569">model versions</text>
+<rect x="2040" y="250" width="340" height="310" rx="16" fill="#FFFFFF" stroke="#334155" stroke-width="3"/>
+<circle cx="2160" cy="330" r="26" fill="#334155"/>
+<path d="M 2114 412 a 46 46 0 0 1 92 0 z" fill="#334155"/>
+<path d="M 2234 376 h 68 l -10 -14 v -26 a 24 26 0 0 0 -48 0 v 26 z" fill="#F59E0B" stroke="#B45309" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="2268" cy="384" r="8" fill="#B45309"/>
+<circle cx="2268" cy="308" r="5" fill="#B45309"/>
+<path d="M 2314 322 q 10 14 0 30" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round"/>
+<path d="M 2222 322 q -10 14 0 30" fill="none" stroke="#B45309" stroke-width="3" stroke-linecap="round"/>
+<circle cx="2296" cy="314" r="16" fill="#DC2626" stroke="#FFFFFF" stroke-width="3"/>
+<text x="2296" y="322" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">1</text>
+<text x="2210.0" y="472" text-anchor="middle" font-size="38" font-weight="700" fill="#0F172A">Building manager</text>
+<text x="2210.0" y="516" text-anchor="middle" font-size="27" font-weight="400" fill="#475569">acts on alerts</text>
+<rect x="2040" y="600" width="340" height="190" rx="12" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="2"/>
+<rect x="2040" y="600" width="10" height="190" rx="4" fill="#DC2626"/>
+<path d="M 2084 626 l 18 32 h -36 z" fill="#DC2626"/>
+<text x="2084" y="653" text-anchor="middle" font-size="22" font-weight="700" fill="#FFFFFF">!</text>
+<text x="2116" y="654" text-anchor="start" font-size="26" font-weight="700" fill="#DC2626">SUSTAINED_HIGH</text>
+<text x="2068" y="700" text-anchor="start" font-size="25" font-weight="400" fill="#0F172A">demand above expected</text>
+<text x="2068" y="736" text-anchor="start" font-size="25" font-weight="400" fill="#475569">excess kWh → CO₂e · $</text>
+<text x="2068" y="772" text-anchor="start" font-size="25" font-weight="400" fill="#475569">top drivers of expectation</text>
+<rect x="2040" y="840" width="44" height="24" rx="4" fill="#2563EB"/>
+<text x="2100" y="860" text-anchor="start" font-size="24" font-weight="400" fill="#475569">code in this repository</text>
+<line x1="2040" y1="900" x2="2084" y2="900" stroke="#2563EB" stroke-width="3" stroke-dasharray="12 8"/>
+<text x="2100" y="908" text-anchor="start" font-size="24" font-weight="400" fill="#475569">model hot-swap</text>
+<line x1="2040" y1="948" x2="2084" y2="948" stroke="#94A3B8" stroke-width="3" stroke-dasharray="12 8"/>
+<text x="2100" y="956" text-anchor="start" font-size="24" font-weight="400" fill="#475569">planned feed</text>
 </svg>

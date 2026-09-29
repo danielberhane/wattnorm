@@ -1,7 +1,5 @@
 # Wattnorm — real-time contextual energy anomaly detection for buildings
 
-*Knows what your building should be drawing.*
-
 Buildings account for roughly a third of global energy use, and a large share of that is wasted
 quietly: an air-handling unit left running over a weekend, a lighting schedule that never switched
 back after a holiday, a chiller cycling against a failed sensor. A meter records all of it, but a
