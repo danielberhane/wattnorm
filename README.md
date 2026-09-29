@@ -1,83 +1,33 @@
 # Wattnorm — real-time contextual energy anomaly detection for buildings
 
-Buildings account for roughly a third of global energy use, and a large share of that is wasted
-quietly: an air-handling unit left running over a weekend, a lighting schedule that never switched
-back after a holiday, a chiller cycling against a failed sensor. A meter records all of it, but a
-raw reading cannot say whether 280 kW is a problem — at 2 p.m. on a hot July weekday it is normal,
-at 2 a.m. on a Sunday in April it is not. An anomaly is a reading that is unusual *for its context*:
-the time, the day, the season, the weather.
+Buildings account for roughly a third of global energy use, and much of it is wasted quietly: an
+air-handling unit left running over a weekend, a lighting schedule that never switched back after a
+holiday, a chiller cycling against a failed sensor. A raw meter reading cannot say whether 280 kW is
+a problem — at 2 p.m. on a hot July weekday it is normal, at 2 a.m. on a Sunday in April it is not.
 
-Wattnorm is a complete, deployable system built on that idea (the Python package is `smartbuilding`), developed on six years of
-15-minute electricity data from a university research building. It learns what the building
-*should* draw for the current time and weather, scores every meter reading against that
-expectation as it arrives, and raises direction-aware alerts on a Grafana dashboard — **too high =
-waste, too low = failure** — with the avoidable energy translated to CO₂e and cost so that a
-building manager, not a data scientist, can act on it. Historical data is replayed through the
-live pipeline today; a real meter publishes the same message format tomorrow.
-
-It builds on work from my master's research at Western University, published as
-[*An ensemble learning framework for anomaly detection in building energy consumption*](https://www.sciencedirect.com/science/article/pii/S0378778817306904)
-(Araya, Grolinger, ElYamany, Capretz and Bitsuamlak, *Energy and Buildings* 144, 2017). That paper
-introduced CCAD-SW, a pattern-based classifier that scores overlapping sliding windows of
-consumption with an autoencoder, and combined it with two prediction-based classifiers (support
-vector regression and random forest) in a majority-vote ensemble that, on real consumption data from
-a building in Brampton, Ontario, raised the sensitivity of CCAD-SW by 3.6 % and cut its false-alarm
-rate by 2.7 %. This system takes the prediction-based branch of that framework as its core
-and adds what a paper does not need but a deployment does: calibrated bands, adaptation to a
-building that changes, a promotion gate, and a dashboard.
-
-The methodology, data work, evaluation and the defects found along the way are written up in full
-in [`docs/writeup.md`](docs/writeup.md).
+Wattnorm learns what a building *should* draw for the current time and weather, scores every
+15-minute meter reading against that expectation as it arrives, and raises direction-aware alerts on
+a Grafana dashboard — **too high = waste, too low = failure** — with the avoidable energy expressed
+in kWh, CO₂e and cost so that a building manager, not a data scientist, can act on it. It was
+developed on six years of data from a university research building. Historical data is replayed
+through the live pipeline today; a real meter publishes the same message format tomorrow.
 
 <img src="docs/img/dashboard.png" alt="Building Energy Anomalies dashboard — two weeks of real meter data, January 2020" width="100%">
 
-*Real 15-min meter data replayed through the live pipeline (no synthetic values). Blue = metered demand;
-orange dashed = expected demand for that time and weather, adjusted for the building's recent level;
-shaded band = the 90 % normal range; red = alerts. Below: the residual in σ and the CUSUM that
-catches sustained deviations.*
+*Two weeks of real meter data replayed through the live pipeline. Blue: metered demand · orange
+dashed: expected demand · shaded: 90 % normal range · red: alerts. Lower panels: residual in σ and
+the CUSUM that catches sustained deviations.*
 
 <img src="docs/img/tiles.png" alt="Sustainability tiles" width="100%">
 
-*Excess energy recorded on HIGH alerts that started in the selected range, times the grid emission
-factor and tariff (both editable on the dashboard — the defaults are placeholders). Readings outside an
-alert are not counted, so a normal building reads zero.*
+*Excess energy on HIGH alerts, converted with the grid emission factor and tariff (both editable on
+the dashboard; the defaults are placeholders). A normal building reads zero.*
 
-## How it works
+## Architecture
 
-<img src="docs/img/architecture.svg" alt="Architecture — meter and weather over MQTT into the scorer, TimescaleDB and Grafana; trainer and MLflow registry feed the model" width="100%">
+<img src="docs/img/architecture.svg" alt="Wattnorm system architecture — meter and weather over MQTT into the scorer, TimescaleDB and Grafana; trainer and MLflow registry supply the model" width="100%">
 
-- **Model** — LightGBM quantile regression (q05/q50/q95) on calendar (cyclic time-of-day, weekday,
-  day-of-year, holidays) and weather (temperature, humidity, wind, pressure, heating/cooling degrees).
-  No demand lags: the model answers *what should this building draw now*, so a sustained anomaly
-  never becomes "normal" within hours.
-- **Band** — one scalar calibration so the band covers 90 % of ordinary readings; a slow level
-  tracker (3-day half-life, robust to anomalies) follows genuine regime changes.
-- **Rules** — `SPIKE` (one reading > 5σ), `SUSTAINED_HIGH/LOW` (CUSUM), `STUCK` (2 h identical).
-  Each alert carries observed vs expected kW, excess kWh → CO₂e/$, and the top-3 SHAP drivers of the
-  expectation.
-- **Evaluation without labels** — six anomaly types injected into a held-out year, event-level
-  recall / false alarms per week / time-to-detect, against a seasonal-naive baseline sharing the
-  same rules. Splits are strictly temporal: train 2016–17 · calibrate 2018 · test 2019 · replay
-  2020-01 → 2021-05.
-- **Operations** — MLflow registry with a promotion gate, scorer hot-swap, trailing-window retrain
-  (`make retrain`, cron-able), one Grafana dashboard whose health row is plain SQL on the `scores`
-  table. `/health` reports the model version and the rules it is running.
-
-## Terms used above
-
-- **Quantile regression** — a model that predicts a chosen percentile of demand (here the 5th, 50th and 95th) instead of only the average, so it gives a range as well as a central estimate.
-- **Band / coverage** — the range between the 5th and 95th percentile predictions, scaled so that 90 % of ordinary readings fall inside it; coverage is the share that actually does.
-- **Residual and σ** — the gap between the metered and expected demand, expressed in units of the band's half-width so that "3σ" means the same thing in summer and winter.
-- **Level tracker** — a slow-moving estimate of how far the building's baseline has shifted from the model's expectation, so a permanent change in occupancy does not look like a permanent anomaly.
-- **CUSUM** — a running sum of the residual that grows while demand stays on one side of expectation and resets otherwise; it catches small but persistent deviations that no single reading would.
-- **SHAP drivers** — the features (hour, temperature, weekday …) that contributed most to the expected value for that reading, used to explain each alert.
-- **Seasonal-naive baseline** — the simplest competitor: expected demand equals the reading one week earlier at the same time.
-- **Recall / false alarms per week** — the share of injected anomalies the detector catches, and how many alerts it raises on data with no anomaly injected.
-- **MQTT** — a lightweight publish/subscribe messaging protocol widely used by meters and IoT gateways.
-- **TimescaleDB** — PostgreSQL with time-series extensions, so Grafana queries it with plain SQL.
-- **MLflow registry / hot-swap** — MLflow stores each trained model with its metrics under a version and an alias (`@staging`, `@production`); the scorer can load a newly promoted version without restarting.
-
-## Run it
+## Quick start
 
 ```
 make setup      # uv sync + pre-commit
@@ -91,8 +41,17 @@ make retrain    # trailing-window retrain with promotion gate  (AS_OF=YYYY-MM-DD
 make figures    # regenerate docs/img/fig*.png and numbers.json from the stack's model and database
 ```
 
-Grafana http://localhost:3000 (view without login; admin/admin to edit) · MLflow http://localhost:5001 ·
-scorer http://localhost:8001/health
+| Service | URL |
+|---|---|
+| Grafana | http://localhost:3000 (view without login; admin/admin to edit) |
+| MLflow | http://localhost:5001 |
+| Scorer health | http://localhost:8001/health |
+
+## Connecting a real meter
+
+Publish `{"meter_id": "...", "ts": "<ISO-8601 with offset>", "kw": <float>}` to
+`building/<meter_id>/demand` (QoS 1) and weather to `weather/<station_id>/obs`. Nothing downstream
+changes; the broker and database are `.env` settings.
 
 ## Data
 
@@ -103,14 +62,26 @@ features are computed in `America/New_York`. The data are not redistributed with
 
 > Cornell University, Facilities and Campus Services — Energy and Sustainability. *Energy Management and Control System (EMCS) Portal*, Clark Hall electric demand, 15-minute interval, January 2015 – May 2021. https://portal.emcs.cornell.edu (accessed 2022 for the original study; re-used here). Data are the property of Cornell University and are used for research and educational purposes.
 
-Weather is the Open-Meteo ERA5 archive for the building's location (`make weather`). Design, phases and
-decisions: `docs/PLAN.md`. Operating guide for building managers: `docs/runbook.md`.
+Weather is the Open-Meteo ERA5 archive for the building's location (`make weather`).
 
-## Connecting a real meter
+## Research background
 
-Publish `{"meter_id": "...", "ts": "<ISO-8601 with offset>", "kw": <float>}` to
-`building/<meter_id>/demand` (QoS 1) and weather to `weather/<station_id>/obs`. Nothing downstream
-changes; the broker and database are `.env` settings.
+Wattnorm builds on my master's research at Western University, published as
+[*An ensemble learning framework for anomaly detection in building energy consumption*](https://www.sciencedirect.com/science/article/pii/S0378778817306904)
+(Araya, Grolinger, ElYamany, Capretz and Bitsuamlak, *Energy and Buildings* 144, 2017). The paper
+combined CCAD-SW, a pattern-based autoencoder classifier over sliding windows, with support vector
+regression and random forest predictors in a majority-vote ensemble that, on data from a building in
+Brampton, Ontario, raised CCAD-SW's sensitivity by 3.6 % and cut its false-alarm rate by 2.7 %.
+Wattnorm takes the prediction-based branch as its core and adds what a deployment needs: calibrated
+bands, adaptation to a building that changes, a promotion gate, and a dashboard.
+
+## Documentation
+
+- [`docs/writeup.md`](docs/writeup.md) — methodology, data work, evaluation, and the defects found along the way
+- [`docs/runbook.md`](docs/runbook.md) — operating guide for building managers
+- [`docs/PLAN.md`](docs/PLAN.md) — design, phases and decisions
+
+The Python package is `smartbuilding` (`src/smartbuilding/`).
 
 ## License
 
